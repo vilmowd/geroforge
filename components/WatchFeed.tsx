@@ -4,11 +4,13 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { useRouter } from "next/navigation";
 import { ChevronDown, MessageCircle, Pause, Play, Share2, Volume2, VolumeX, X } from "lucide-react";
 import { ContentPoster } from "@/components/ContentPoster";
+import { SiteMark } from "@/components/SiteMark";
 import { CommentThread } from "@/components/CommentThread";
 import { VoteButton } from "@/components/VoteButton";
 import type { CommentNode } from "@/lib/comments";
 import { useSharpPicture } from "@/components/useSharpPicture";
 import { canonicalVideoPage, playbackEmbedSrc } from "@/lib/embed";
+import { siteHost } from "@/lib/site-mark";
 import { pictureSources } from "@/lib/thumbnails";
 import type { FeedCard, FeedFilter } from "@/lib/feed";
 import { timeAgo } from "@/lib/format";
@@ -346,10 +348,18 @@ function WatchSlide({
             tall={post.format === "reel"}
           />
         ) : post.thumbnailUrl ? (
-          <StillImage src={post.thumbnailUrl} title={post.title} category={post.category} format={post.format} />
+          <StillImage
+            src={post.thumbnailUrl}
+            title={post.title}
+            category={post.category}
+            format={post.format}
+            host={siteHost(post.sourceUrl, post.embedUrl)}
+          />
         ) : (
           <div className="relative h-full w-full">
-            <ContentPoster title={post.title} category={post.category} format={post.format} />
+            <SiteMark host={siteHost(post.sourceUrl, post.embedUrl)} large>
+              <ContentPoster title={post.title} category={post.category} format={post.format} />
+            </SiteMark>
           </div>
         )}
       </div>
@@ -452,17 +462,21 @@ function StillImage({
   title,
   category,
   format,
+  host,
 }: {
   src: string;
   title: string;
   category: string;
   format: FeedCard["format"];
+  host: string | null;
 }) {
   const picture = useSharpPicture(src);
   if (!picture.src) {
     return (
       <div className="relative h-full w-full">
-        <ContentPoster title={title} category={category} format={format} />
+        <SiteMark host={host} large>
+          <ContentPoster title={title} category={category} format={format} />
+        </SiteMark>
       </div>
     );
   }

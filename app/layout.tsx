@@ -38,7 +38,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const user = await getCurrentUser();
 
   return (
-    <html lang="en" className={sans.variable}>
+    <html lang="en" className={sans.variable} suppressHydrationWarning>
       <body className="font-sans antialiased">
         <script
           dangerouslySetInnerHTML={{
