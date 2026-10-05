@@ -504,52 +504,65 @@ function ReelPlayer({
   tall: boolean;
 }) {
   const [muted, setMuted] = useVideosMuted();
-  const [ready, setReady] = useState(false);
+  const [shownSrc, setShownSrc] = useState<string | null>(null);
   const frameRef = useRef<HTMLIFrameElement>(null);
   const mutedRef = useRef(muted);
   const kickRef = useRef<() => void>(() => {});
   mutedRef.current = muted;
   const src = active ? playbackEmbedSrc(embedUrl) : null;
+  const ready = Boolean(src) && shownSrc === src;
   const frame = tall
     ? "h-[100dvh] w-[min(100vw,calc(100dvh*9/16))]"
     : "h-[min(100dvh,calc(100vw*9/16))] w-[min(100vw,calc(100dvh*16/9))]";
 
   useEffect(() => {
-    setReady(false);
-  }, [src]);
+    if (!src) return;
+    setMuted(true);
+  }, [src, setMuted]);
 
   useEffect(() => {
-    if (!src) return;
+    if (!src || !ready) return;
     let stopped = false;
-    function kick() {
-      if (stopped) return;
-      const player = frameRef.current;
-      if (!player?.contentWindow) return;
-      const host = frameHost(player);
+    function playMuted() {
+      const frame = stopped ? null : frameRef.current;
+      if (!frame?.contentWindow) return;
+      const host = frameHost(frame);
       if (host === "www.youtube.com" || host === "www.youtube-nocookie.com") {
-        player.contentWindow.postMessage(JSON.stringify({ event: "listening", id: 1, channel: "widget" }), "*");
-        sendPlayer(player, "playVideo");
-        if (mutedRef.current) {
-          sendPlayer(player, "mute");
-        } else {
-          sendPlayer(player, "setVolume", [100]);
-          sendPlayer(player, "unMute");
-        }
+        frame.contentWindow.postMessage(JSON.stringify({ event: "listening", id: 1, channel: "widget" }), "*");
+        sendPlayer(frame, "mute");
+        sendPlayer(frame, "playVideo");
         return;
       }
       if (host === "player.vimeo.com") {
-        player.contentWindow.postMessage({ method: "play" }, "https://player.vimeo.com");
-        player.contentWindow.postMessage({ method: "setVolume", value: mutedRef.current ? 0 : 1 }, "https://player.vimeo.com");
+        frame.contentWindow.postMessage({ method: "setVolume", value: 0 }, "https://player.vimeo.com");
+        frame.contentWindow.postMessage({ method: "play" }, "https://player.vimeo.com");
       }
     }
-    kickRef.current = kick;
-    const timers = [0, 400, 1000, 1800, 3000].map((delay) => window.setTimeout(kick, delay));
+    function onMessage(event: MessageEvent) {
+      const frame = stopped ? null : frameRef.current;
+      if (!frame || event.source !== frame.contentWindow) return;
+      let data: { event?: string } | null = null;
+      if (typeof event.data === "string") {
+        try {
+          data = JSON.parse(event.data) as { event?: string };
+        } catch {
+          return;
+        }
+      } else if (event.data && typeof event.data === "object") {
+        data = event.data as { event?: string };
+      }
+      if (data?.event === "onReady") playMuted();
+    }
+    kickRef.current = playMuted;
+    window.addEventListener("message", onMessage);
+    const timers = [0, 400, 1200].map((delay) => window.setTimeout(playMuted, delay));
     return () => {
       stopped = true;
       kickRef.current = () => {};
+      window.removeEventListener("message", onMessage);
       timers.forEach((timer) => window.clearTimeout(timer));
     };
-  }, [src]);
+  }, [src, ready]);
 
   function toggleSound() {
     const next = !mutedRef.current;
@@ -579,12 +592,12 @@ function ReelPlayer({
           key={src}
           src={src}
           title={title}
-          className={`absolute inset-0 h-full w-full ${ready ? "opacity-100" : "opacity-0"}`}
+          className="absolute inset-0 h-full w-full"
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen"
           allowFullScreen
           referrerPolicy="strict-origin-when-cross-origin"
           onLoad={() => {
-            setReady(true);
+            setShownSrc(src);
             kickRef.current();
           }}
         />
@@ -604,7 +617,7 @@ function ReelPlayer({
   );
 }
 
-let videosMuted = false;
+let videosMuted = true;
 const muteListeners = new Set<(muted: boolean) => void>();
 
 function useVideosMuted() {

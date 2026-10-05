@@ -153,10 +153,10 @@ export function youtubeVideoId(input: string | null | undefined): string | null 
 export function playbackEmbedSrc(input: string | null | undefined): string | null {
   const id = youtubeVideoId(input);
   if (id) {
-    const url = new URL(`https://www.youtube.com/embed/${id}`);
+    const url = new URL(`https://www.youtube-nocookie.com/embed/${id}`);
     url.searchParams.set("autoplay", "1");
     // Phones refuse to start a clip that opens with sound, and then show their own play button.
-    // Start silent so playback begins, then the player turns sound on when the page is allowed to.
+    // Start silent. Sound comes on only after the visitor taps the sound button.
     url.searchParams.set("mute", "1");
     url.searchParams.set("playsinline", "1");
     url.searchParams.set("rel", "0");

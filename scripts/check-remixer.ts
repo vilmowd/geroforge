@@ -34,7 +34,7 @@ assert(youtube === "https://www.youtube-nocookie.com/embed/aqz-KE-bpKQ", youtube
 assert(isAllowedEmbedUrl(youtube || ""), "youtube embed rejected");
 const playing = playbackEmbedSrc(youtube);
 const playback = playing ? new URL(playing) : null;
-assert(playback?.hostname === "www.youtube.com", playing || "missing playback embed");
+assert(playback?.hostname === "www.youtube-nocookie.com", playing || "missing playback embed");
 assert(playback?.searchParams.get("autoplay") === "1", "playback autoplay");
 assert(playback?.searchParams.get("mute") === "1", "phone playback must start muted");
 assert(playback?.searchParams.get("playsinline") === "1", "playback playsinline");
