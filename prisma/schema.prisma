@@ -1,0 +1,154 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ContentType {
+  ARTICLE
+  VIDEO_EMBED
+}
+
+enum ScrapeStatus {
+  SUCCESS
+  ERROR
+}
+
+model User {
+  id         String     @id @default(cuid())
+  publicId   String     @unique
+  email        String     @unique
+  emailHash    String?    @unique
+  name         String?
+  passwordHash String?
+  avatarUrl    String?
+  bio          String?
+  karma      Int        @default(0)
+  createdAt  DateTime   @default(now())
+  posts      Post[]
+  comments   Comment[]
+  votes        Vote[]
+  commentLikes CommentLike[]
+  seenPosts    SeenPost[]
+  sessions     Session[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model MagicLink {
+  id        String    @id @default(cuid())
+  email     String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([email, createdAt])
+  @@index([expiresAt])
+}
+
+model Post {
+  id             String      @id @default(cuid())
+  title          String
+  slug           String      @unique
+  publicId       String      @unique
+  contentType    ContentType
+  sourceUrl      String?     @unique
+  sourceName     String
+  embedUrl       String?
+  thumbnailUrl   String?
+  category       String
+  rawContent     String?     @db.Text
+  remixedContent Json?
+  upvotesCount   Int         @default(0)
+  commentCount   Int         @default(0)
+  isAutomated    Boolean     @default(true)
+  createdAt      DateTime    @default(now())
+  authorId       String?
+  author         User?       @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  votes          Vote[]
+  comments       Comment[]
+  seenBy         SeenPost[]
+
+  @@index([createdAt])
+  @@index([category, createdAt])
+  @@index([contentType, createdAt])
+  @@index([isAutomated, createdAt])
+}
+
+model Comment {
+  id        String    @id @default(cuid())
+  content   String    @db.Text
+  postId    String
+  post      Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parentId  String?
+  parent    Comment?  @relation("CommentThread", fields: [parentId], references: [id], onDelete: Cascade)
+  replies   Comment[] @relation("CommentThread")
+  likeCount Int       @default(0)
+  likes     CommentLike[]
+  createdAt DateTime  @default(now())
+
+  @@index([postId, createdAt])
+  @@index([userId])
+}
+
+model CommentLike {
+  id        String   @id @default(cuid())
+  userId    String
+  commentId String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  comment   Comment  @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, commentId])
+  @@index([commentId])
+}
+
+model SeenPost {
+  id     String   @id @default(cuid())
+  userId String
+  postId String
+  seenAt DateTime @default(now())
+  user   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post   Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId])
+  @@index([userId, seenAt])
+}
+
+model Vote {
+  id        String   @id @default(cuid())
+  userId    String
+  postId    String
+  value     Int      @default(1)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, postId])
+}
+
+model ScrapeLog {
+  id           String       @id @default(cuid())
+  sourceUrl    String
+  status       ScrapeStatus
+  errorDetails String?      @db.Text
+  createdAt    DateTime     @default(now())
+
+  @@index([createdAt])
+}
