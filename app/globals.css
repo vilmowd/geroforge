@@ -166,17 +166,6 @@ html[data-focus="on"] :focus-visible {
   }
 }
 
-@keyframes watch-rise {
-  from {
-    opacity: 0;
-    transform: translateY(18px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
 @keyframes sheet-up {
   from {
     transform: translateY(24px);
@@ -208,7 +197,7 @@ html[data-focus="on"] :focus-visible {
 @media (hover: hover) and (pointer: fine) {
   .feed-card:hover {
     z-index: 5;
-    transform: translateY(-6px) scale(1.045);
+    transform: translateY(-8px) scale(1.07);
     box-shadow: 0 24px 48px rgba(17, 17, 17, 0.16);
   }
 }
@@ -228,10 +217,6 @@ html[data-focus="on"] :focus-visible {
 
 .swipe-bob {
   animation: swipe-bob 1.3s ease-in-out infinite;
-}
-
-.watch-copy.is-on {
-  animation: watch-rise 0.45s ease both;
 }
 
 .sheet-up {
@@ -361,7 +346,6 @@ html[data-focus="on"] :focus-visible {
   .feed-card,
   .photo-live,
   .swipe-bob,
-  .watch-copy.is-on,
   .sheet-up,
   .vote-pop,
   .like-btn.is-pop::after {

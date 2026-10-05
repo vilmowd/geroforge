@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type SyntheticEvent } from "react";
+import { useEffect, useState } from "react";
 import { pictureSources } from "@/lib/thumbnails";
 
 const TINY = 400;
@@ -8,65 +8,41 @@ const TINY = 400;
 export function useSharpPicture(input: string | null | undefined) {
   const sources = pictureSources(input);
   const key = sources.join("|");
-  const [index, setIndex] = useState(0);
-  const [phase, setPhase] = useState<"loading" | "ready" | "missing">(sources.length ? "loading" : "missing");
-  const decided = useRef(-1);
-  const seenKey = useRef(key);
+  const [shown, setShown] = useState(sources[0] || "");
 
   useEffect(() => {
-    if (seenKey.current === key) return;
-    seenKey.current = key;
-    decided.current = -1;
-    setIndex(0);
-    setPhase(sources.length ? "loading" : "missing");
-  }, [key, sources.length]);
+    const list = pictureSources(input);
+    let cancelled = false;
+    setShown(list[0] || "");
+    if (!list.length) return;
 
-  const current = sources[index] || "";
-
-  const settle = useCallback(
-    (node: HTMLImageElement) => {
-      if (decided.current === index) return;
-      const tooSmall = node.naturalWidth > 0 && node.naturalWidth < TINY;
-      const broken = node.naturalWidth === 0;
-      if ((tooSmall || broken) && index + 1 < sources.length) {
-        decided.current = index;
-        setIndex(index + 1);
-        setPhase("loading");
-        return;
-      }
-      decided.current = index;
-      setPhase(node.naturalWidth > 0 ? "ready" : "missing");
-    },
-    [index, sources.length],
-  );
-
-  const onError = useCallback(() => {
-    if (decided.current === index) return;
-    if (index + 1 < sources.length) {
-      decided.current = index;
-      setIndex(index + 1);
-      setPhase("loading");
-      return;
+    function probe(index: number) {
+      const url = list[index];
+      if (!url) return;
+      const image = new Image();
+      image.referrerPolicy = "no-referrer";
+      image.onload = () => {
+        if (cancelled) return;
+        const tiny = image.naturalWidth > 0 && image.naturalWidth < TINY;
+        if (tiny && index + 1 < list.length) {
+          probe(index + 1);
+          return;
+        }
+        setShown(url);
+      };
+      image.onerror = () => {
+        if (cancelled) return;
+        if (index + 1 < list.length) probe(index + 1);
+        else if (index === 0) setShown("");
+      };
+      image.src = url;
     }
-    decided.current = index;
-    setPhase("missing");
-  }, [index, sources.length]);
 
-  const ref = useCallback(
-    (node: HTMLImageElement | null) => {
-      if (!node?.complete) return;
-      if (node.naturalWidth > 0) settle(node);
-      else onError();
-    },
-    [onError, settle],
-  );
+    probe(0);
+    return () => {
+      cancelled = true;
+    };
+  }, [input, key]);
 
-  const onLoad = useCallback(
-    (event: SyntheticEvent<HTMLImageElement>) => {
-      settle(event.currentTarget);
-    },
-    [settle],
-  );
-
-  return { src: current, phase, ref, onLoad, onError };
+  return { src: shown };
 }

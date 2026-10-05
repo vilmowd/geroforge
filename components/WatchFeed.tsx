@@ -336,7 +336,7 @@ function WatchSlide({
 
   return (
     <section className="watch-slide relative h-full overflow-hidden bg-black" aria-label={post.title}>
-      <div className={`absolute inset-0 flex items-center justify-center ${active ? "watch-copy is-on" : ""}`}>
+      <div className="absolute inset-0 flex items-center justify-center">
         {video && post.embedUrl ? (
           <ReelPlayer
             embedUrl={post.embedUrl}
@@ -459,7 +459,7 @@ function StillImage({
   format: FeedCard["format"];
 }) {
   const picture = useSharpPicture(src);
-  if (picture.phase === "missing" || !picture.src) {
+  if (!picture.src) {
     return (
       <div className="relative h-full w-full">
         <ContentPoster title={title} category={category} format={format} />
@@ -467,19 +467,12 @@ function StillImage({
     );
   }
   return (
-    <div className="relative h-full w-full">
-      {picture.phase === "loading" ? <span className="skeleton absolute inset-0" /> : null}
-      <img
-        key={picture.src}
-        ref={picture.ref}
-        src={picture.src}
-        alt=""
-        referrerPolicy="no-referrer"
-        className={`absolute inset-0 h-full w-full object-cover ${picture.phase === "ready" ? "opacity-100" : "opacity-0"}`}
-        onLoad={picture.onLoad}
-        onError={picture.onError}
-      />
-    </div>
+    <img
+      src={picture.src}
+      alt=""
+      referrerPolicy="no-referrer"
+      className="absolute inset-0 h-full w-full object-cover"
+    />
   );
 }
 
@@ -565,19 +558,14 @@ function ReelPlayer({
 
   return (
     <div className={`relative overflow-hidden bg-black ${frame}`}>
-      {!ready ? (
-        <>
-          {poster ? <img src={poster} alt="" referrerPolicy="no-referrer" className="absolute inset-0 h-full w-full object-cover" /> : null}
-          <span className="skeleton absolute inset-0 opacity-80" />
-        </>
-      ) : null}
+      {!ready && !poster ? <span className="skeleton absolute inset-0" /> : null}
       {src ? (
         <iframe
           ref={frameRef}
           key={src}
           src={src}
           title={title}
-          className="absolute inset-0 h-full w-full"
+          className={`absolute inset-0 h-full w-full ${ready ? "opacity-100" : "opacity-0"}`}
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen"
           allowFullScreen
           referrerPolicy="strict-origin-when-cross-origin"
@@ -587,6 +575,7 @@ function ReelPlayer({
           }}
         />
       ) : null}
+      {poster && !ready ? <img src={poster} alt="" referrerPolicy="no-referrer" className="absolute inset-0 z-[1] h-full w-full object-cover" /> : null}
       {src && active ? (
         <button
           type="button"
