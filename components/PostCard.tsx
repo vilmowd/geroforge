@@ -4,7 +4,9 @@ import { useState } from "react";
 import Link from "next/link";
 import { Clapperboard, Globe2, MessagesSquare, Newspaper, Play, ScrollText } from "lucide-react";
 import { ContentPoster } from "@/components/ContentPoster";
+import { SiteMark } from "@/components/SiteMark";
 import { canonicalVideoPage } from "@/lib/embed";
+import { siteHost } from "@/lib/site-mark";
 import { cardPicture } from "@/lib/thumbnails";
 import type { FeedCard } from "@/lib/feed";
 import { timeAgo } from "@/lib/format";
@@ -69,7 +71,9 @@ export function PostCard({
       <div className={`relative w-full overflow-hidden bg-black ${frame}`}>
         {waiting ? <span className="skeleton pointer-events-none absolute inset-0 z-0" /> : null}
         {phase === "missing" ? (
-          <ContentPoster title={post.title} category={post.category} format={format} decorative />
+          <SiteMark host={siteHost(post.sourceUrl, post.embedUrl)}>
+            <ContentPoster title={post.title} category={post.category} format={format} decorative />
+          </SiteMark>
         ) : null}
         {phase !== "missing" && src ? (
           <img

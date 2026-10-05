@@ -1,5 +1,6 @@
 import { remixText } from "../lib/remixer";
 import { isAllowedEmbedUrl, playbackEmbedSrc, toEmbedUrl } from "../lib/embed";
+import { iconChoices, manifestIcons, normalizeMark, siteHost } from "../lib/site-mark";
 import { cardPicture, imageFromMarkup, openGraphImage, pictureSources } from "../lib/thumbnails";
 import { spreadSources } from "../lib/pipeline";
 
@@ -84,5 +85,59 @@ assert(reddit[1]?.includes("preview.redd.it") === true, "reddit fallback missing
 const wordpress = pictureSources("https://cdn.arstechnica.net/wp-content/uploads/2026/10/news-100326a-lg-500x500.jpg");
 assert(wordpress[0]?.endsWith("/news-100326a-lg.jpg") === true, wordpress[0] || "missing wordpress image");
 assert(wordpress[1]?.includes("-500x500") === true, "wordpress fallback missing");
+
+assert(siteHost("https://www.theguardian.com/world/story", null) === "www.theguardian.com", "guardian host");
+assert(siteHost(null, "https://www.youtube-nocookie.com/embed/aqz-KE-bpKQ") === "www.youtube.com", "youtube host");
+assert(siteHost("javascript:alert(1)", null) === null, "script host");
+assert(siteHost("http://127.0.0.1/secret", null) === null, "loopback host");
+assert(siteHost("http://localhost/admin", null) === null, "localhost host");
+
+const icons = iconChoices(
+  `<link rel="mask-icon" href="https://cdn.example/mask.svg">
+   <link rel="icon" href="javascript:alert(1)">
+   <link rel="icon" sizes="32x32" href="/favicon-32.png">
+   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+   <link rel="icon" type="image/svg+xml" href="/icon.svg">`,
+  "https://www.example.com/news",
+);
+assert(icons[0]?.href === "https://www.example.com/icon.svg", icons[0]?.href || "missing svg icon");
+assert(icons.some((icon) => icon.href.endsWith("/apple-touch-icon.png")), "apple icon missing");
+assert(!icons.some((icon) => icon.href.includes("mask") || icon.href.startsWith("javascript:")), "unsafe icon kept");
+
+const manifest = manifestIcons(
+  JSON.stringify({ icons: [{ src: "/icons/512.png", sizes: "512x512" }, { src: "/icons/32.png", sizes: "32x32" }] }),
+  "https://www.example.com/manifest.webmanifest",
+);
+assert(manifest[0]?.href === "https://www.example.com/icons/512.png", manifest[0]?.href || "missing manifest icon");
+
+const png = Buffer.alloc(24);
+png.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52]);
+png.writeUInt32BE(180, 16);
+png.writeUInt32BE(180, 20);
+assert(normalizeMark(png, "image/png")?.width === 180, "png size");
+assert(normalizeMark(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>'), "image/svg+xml") === null, "script svg");
+const plainSvg = normalizeMark(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"></svg>'), "image/svg+xml");
+assert(plainSvg?.width === 512, "plain svg");
+assert(plainSvg?.bytes.toString().includes('width="512"') === true, "svg display size");
+const tinySvg = normalizeMark(
+  Buffer.from('<svg height="18" viewBox="4 4 188 188" width="18" xmlns="http://www.w3.org/2000/svg"></svg>'),
+  "image/svg+xml",
+);
+assert(tinySvg?.bytes.toString().includes('width="512"') === true, "tiny svg enlarged");
+assert(tinySvg?.bytes.toString().includes("viewBox") === true, "tiny svg keeps viewBox");
+assert(tinySvg?.bytes.toString().includes('width="18"') !== true, "tiny svg size removed");
+
+const icoPng = Buffer.alloc(24);
+icoPng.set(png.subarray(0, 24));
+const ico = Buffer.alloc(22 + icoPng.length);
+ico.writeUInt16LE(1, 2);
+ico.writeUInt16LE(1, 4);
+ico[6] = 128;
+ico[7] = 128;
+ico.writeUInt32LE(icoPng.length, 14);
+ico.writeUInt32LE(22, 18);
+icoPng.copy(ico, 22);
+assert(normalizeMark(ico, "image/x-icon")?.type === "image/png", "ico png");
+assert(normalizeMark(ico, "image/x-icon")?.width === 180, "ico size");
 
 console.log("remixer and embed checks passed");

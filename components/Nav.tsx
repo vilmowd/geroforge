@@ -11,8 +11,8 @@ export function Nav({
   return (
     <header className="sticky top-0 z-30 border-b border-black/5 bg-white/90 pt-[env(safe-area-inset-top)] backdrop-blur-xl">
       <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-2 px-3 sm:px-5">
-        <Link href="/" className="shrink-0 text-base font-extrabold tracking-tight text-cream sm:text-lg">
-          GeroForge
+        <Link href="/" className="inline-flex shrink-0 items-center" aria-label="GeroForge">
+          <img src="/logo.png" alt="" width={424} height={269} className="h-9 w-auto rounded-lg" />
         </Link>
         <div className="flex min-w-0 items-center gap-1.5">
           {user ? (

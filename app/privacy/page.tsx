@@ -37,7 +37,7 @@ export default function PrivacyPage() {
 
       <h2 className="pt-2 text-lg font-extrabold">Public items on the shelf</h2>
       <p>
-        Automated posts come from public feeds. For each item GeroForge keeps a title, a short original note, the source name, the category, the link back to the original, an embed address when the item is a video, and a thumbnail address when the source provides one. The article body and the media file are not stored. When a video plays, or a thumbnail loads, your browser contacts that host, and that host may receive your IP address under its own policy.
+        Automated posts come from public feeds. For each item GeroForge keeps a title, a short original note, the source name, the category, the link back to the original, an embed address when the item is a video, and a thumbnail address when the source provides one. The article body and the media file are not stored. When a video plays, or a thumbnail loads, your browser contacts that host, and that host may receive your IP address under its own policy. When a story has no picture, the server asks that site for its icon and the shelf shows the icon on a white tile. Your browser loads that icon from GeroForge, not from the other site.
       </p>
 
       <h2 className="pt-2 text-lg font-extrabold">Who else processes information</h2>
