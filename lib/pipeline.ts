@@ -10,7 +10,7 @@ export const SOURCES_PER_PASS = 8;
 export const REELS_PER_RUN = 6;
 export const VIDEOS_PER_RUN = 4;
 
-const SLOT_MS = 12 * 60 * 60 * 1000;
+export const SLOT_MS = 12 * 60 * 60 * 1000;
 
 export function ingestionSlot(now = Date.now()): number {
   return Math.floor(now / SLOT_MS);

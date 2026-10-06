@@ -108,6 +108,17 @@ export function DigestActions({
           <button type="submit" className="btn min-h-9 px-3 py-1 text-xs" disabled={busy || name.trim().length < 3}>
             Send
           </button>
+          <button
+            type="button"
+            className="btn-ghost min-h-9 px-3 py-1 text-xs"
+            disabled={busy}
+            onClick={() => {
+              setPassOpen(false);
+              setName("");
+            }}
+          >
+            Cancel
+          </button>
         </form>
       ) : null}
       {offers.length > 0 ? (
@@ -149,9 +160,22 @@ export function DigestActions({
             rows={2}
             className="field py-2 text-sm"
           />
-          <button type="submit" className="btn w-fit min-h-9 px-3 py-1 text-xs" disabled={busy}>
-            Offer this line
-          </button>
+          <div className="flex gap-2">
+            <button type="submit" className="btn w-fit min-h-9 px-3 py-1 text-xs" disabled={busy}>
+              Offer this line
+            </button>
+            <button
+              type="button"
+              className="btn-ghost min-h-9 px-3 py-1 text-xs"
+              disabled={busy}
+              onClick={() => {
+                setOfferOpen(false);
+                setLine("");
+              }}
+            >
+              Cancel
+            </button>
+          </div>
         </form>
       ) : null}
       {note ? <p className="text-xs text-mist">{note}</p> : null}

@@ -6,6 +6,7 @@ import { postWhere } from "@/lib/post-ref";
 import { prisma } from "@/lib/prisma";
 import { openCursor, reveal, sealCursor } from "@/lib/seal";
 import { pairDoors, preferSources, type DoorPeek, type LineOfferView } from "@/lib/digest";
+import { leadWithFollows, readFollows } from "@/lib/follows";
 import { attachDigest, peekPass, sourceWeights } from "@/lib/loops";
 import { inferFormat, readRemix, type RemixedContent, type ShelfFormat } from "@/lib/remixer";
 import { SOURCES } from "@/lib/sources";
@@ -159,7 +160,7 @@ export async function getFeedPage(
     const have = new Set(pool.map((post) => post.id));
     pool = pool.concat(older.filter((post) => !have.has(post.id)));
   }
-  const ordered = preferSources(arrangeShelf(pool, filter, mix), await sourceWeights(userId));
+  const ordered = leadWithFollows(preferSources(arrangeShelf(pool, filter, mix), await sourceWeights(userId)), await readFollows(userId));
   const start = decodeOffset(cursor, mix);
   const page: FeedRow[] = [];
   let index = start;

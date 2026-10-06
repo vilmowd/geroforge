@@ -42,6 +42,9 @@ model User {
   lineOffers   LineOffer[]
   linePicks    LinePick[]
   doorPicks    DoorPick[]
+  deskFollows  DeskFollow[]
+  sourceFollows SourceFollow[]
+  corrections  Correction[]
 }
 
 model Session {
@@ -96,6 +99,7 @@ model Post {
   lineOffers     LineOffer[]
   doorPicks      DoorPick[]  @relation("DoorChosen")
   doorOthers     DoorPick[]  @relation("DoorOther")
+  corrections    Correction[]
 
   @@index([createdAt])
   @@index([category, createdAt])
@@ -239,6 +243,42 @@ model DoorPick {
 
   @@unique([userId, postId, otherId])
   @@index([userId, createdAt])
+}
+
+model DeskFollow {
+  id        String   @id @default(cuid())
+  userId    String
+  desk      String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, desk])
+  @@index([userId])
+}
+
+model SourceFollow {
+  id         String   @id @default(cuid())
+  userId     String
+  sourceName String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@unique([userId, sourceName])
+  @@index([userId])
+}
+
+model Correction {
+  id        String   @id @default(cuid())
+  userId    String
+  postId    String
+  note      String
+  pulled    Boolean  @default(false)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, postId])
+  @@index([pulled, createdAt])
 }
 
 model ScrapeLog {

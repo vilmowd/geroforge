@@ -1,8 +1,7 @@
 import Link from "next/link";
-import type { FeedFilter } from "@/lib/feed";
-
-const TABS: { id: FeedFilter; label: string; href: string }[] = [
+const TABS: { id: string; label: string; href: string }[] = [
   { id: "all", label: "All", href: "/" },
+  { id: "digest", label: "Daily digest", href: "/digest" },
   { id: "videos", label: "Videos", href: "/videos" },
   { id: "reels", label: "Reels", href: "/reels" },
   { id: "news", label: "News", href: "/news" },
@@ -11,7 +10,7 @@ const TABS: { id: FeedFilter; label: string; href: string }[] = [
   { id: "posts", label: "Posts", href: "/posts" },
 ];
 
-export function CategoryTabs({ active }: { active: FeedFilter | null }) {
+export function CategoryTabs({ active }: { active: string | null }) {
   return (
     <div className="app-chips hidden min-w-0 flex-1 snap-x gap-2 overflow-x-auto [scrollbar-width:none] sm:flex sm:gap-1.5">
       {TABS.map((tab) => {

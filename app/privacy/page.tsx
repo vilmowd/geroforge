@@ -32,7 +32,7 @@ export default function PrivacyPage() {
         Text size, contrast, and the other accessibility choices stay in this browser’s local storage. They are not sent to the server. Your cookie choice, accept all or accept necessary, is also stored only in this browser. The choice to read the shelf as sentences, instead of pictures, stays in this browser too.
       </p>
       <p>
-        If you are signed in, a few more choices are stored with the account. An answer about whether leaving for a source was worth it. A line you keep. A line you offer or pick for a post. A clipping you pass to another person, which is shown once on their next visit and then dropped. These are not used for advertising.
+        If you are signed in, a few more choices are stored with the account. An answer about whether leaving for a source was worth it. A line you keep. A line you offer or pick for a post. A clipping you pass to another person, which is shown once on their next visit and then dropped. A desk or a source you follow, which leads your shelf. These are not used for advertising.
       </p>
       <p>
         The application does not run an advertising or analytics product, and it does not sell personal information. The computer that hosts the site may keep ordinary connection logs, such as an IP address, the time, and the page requested, as part of running a web server. Rate limits used to slow abusive traffic are kept in memory on the server and are not a profile of you. Feed-fetch logs record the public source address and whether the fetch worked. They are deleted after about 14 days. They are not a history of the pages you opened.
@@ -53,7 +53,7 @@ export default function PrivacyPage() {
 
       <h2 className="pt-2 text-lg font-extrabold">How long information is kept</h2>
       <p>
-        A session ends when it expires or you sign out. Expired sessions, used or expired sign-in links, and old feed-fetch logs are deleted on a schedule. Account details, comments, likes, and seen posts stay until the account is deleted. Deleting an account removes the account record and the comments, likes, sessions, and seen posts tied to it.
+        A session ends when it expires or you sign out. Expired sessions, used or expired sign-in links, and old feed-fetch logs are deleted on a schedule. Account details, comments, likes, and seen posts stay until the account is deleted. Deleting an account removes the account record and the comments, likes, sessions, seen posts, and follows tied to it.
       </p>
 
       <h2 className="pt-2 text-lg font-extrabold">Children</h2>
