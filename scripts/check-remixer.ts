@@ -1,8 +1,10 @@
+import { listingScore, redditClip, shelfFormat } from "../lib/clips";
 import { remixText } from "../lib/remixer";
-import { isAllowedEmbedUrl, playbackEmbedSrc, toEmbedUrl } from "../lib/embed";
+import { isAllowedEmbedUrl, playbackEmbedSrc, redditVideoEmbed, toEmbedUrl } from "../lib/embed";
+import { SOURCES } from "../lib/sources";
 import { iconChoices, manifestIcons, normalizeMark, siteHost } from "../lib/site-mark";
 import { cardPicture, imageFromMarkup, openGraphImage, pictureSources } from "../lib/thumbnails";
-import { spreadSources } from "../lib/pipeline";
+import { REELS_PER_RUN, VIDEOS_PER_RUN, spreadSources } from "../lib/pipeline";
 
 function assert(condition: boolean, message: string) {
   if (!condition) throw new Error(message);
@@ -38,6 +40,76 @@ assert(playback?.hostname === "www.youtube-nocookie.com", playing || "missing pl
 assert(playback?.searchParams.get("autoplay") === "1", "playback autoplay");
 assert(playback?.searchParams.get("mute") === "1", "phone playback must start muted");
 assert(playback?.searchParams.get("playsinline") === "1", "playback playsinline");
+assert(playback?.searchParams.get("loop") === null, "playback should not pin the first clip");
+
+const shortsFeed = SOURCES.find((source) => source.sourceName === "YouTube Shorts / Zach King");
+assert(shortsFeed?.format === "reel", shortsFeed?.format || "missing shorts feed");
+assert(shortsFeed?.url.includes("playlist_id=UUSHq8DICunczvLuJJq414110A") === true, shortsFeed?.url || "missing shorts url");
+const longFeed = SOURCES.find((source) => source.sourceName === "YouTube / Veritasium");
+assert(longFeed?.url.includes("playlist_id=UULFHnyfMqiRRG1u-2MsSQLbXA") === true, longFeed?.url || "missing long video feed");
+assert(longFeed?.format === "video", longFeed?.format || "missing long format");
+assert(SOURCES.filter((source) => source.format === "reel").length >= 24, "reel sources");
+assert(SOURCES.some((source) => source.sourceName === "YouTube Shorts / NBA"), "sports reel source");
+assert(SOURCES.some((source) => source.sourceName === "YouTube / NASA"), "long video source");
+assert(SOURCES.some((source) => source.sourceName === "Reddit /r/ArtisanVideos"), "maker reel source");
+assert(SOURCES.some((source) => source.sourceName === "Reddit / popular clips" && source.url.includes("/r/TikTok+")), "popular clips across communities");
+assert(SOURCES.some((source) => source.sourceName === "Reddit / popular videos" && source.format === "video"), "popular videos across communities");
+assert(REELS_PER_RUN >= 6 && VIDEOS_PER_RUN >= 4, "clip budgets");
+assert(
+  SOURCES.filter((source) => source.kind === "youtube" && source.format === "video").every((source) => source.url.includes("playlist_id=UULF")),
+  "video channels use the long uploads feed",
+);
+assert(
+  SOURCES.filter((source) => source.kind === "youtube" && source.format === "reel").every((source) => source.url.includes("playlist_id=UUSH")),
+  "reel channels use the shorts feed",
+);
+
+const tiktokPost = redditClip(
+  {
+    title: "A short clip",
+    permalink: "/r/TikTok/comments/abc123/a_short_clip/",
+    url: "https://www.tiktok.com/@reader/video/1234567890123456789",
+  },
+  "reel",
+);
+assert(tiktokPost?.format === "reel", tiktokPost?.format || "missing tiktok clip");
+assert(tiktokPost?.embedUrl === "https://www.tiktok.com/embed/v2/1234567890123456789", tiktokPost?.embedUrl || "missing tiktok embed");
+
+const nativePost = redditClip(
+  {
+    title: "Loop",
+    permalink: "/r/BetterEveryLoop/comments/abc123/loop/",
+    is_video: true,
+    domain: "v.redd.it",
+  },
+  "reel",
+);
+assert(nativePost?.embedUrl === redditVideoEmbed("https://www.reddit.com/r/BetterEveryLoop/comments/abc123/loop/"), nativePost?.embedUrl || "missing reddit player");
+assert(nativePost?.format === "reel", nativePost?.format || "native clip format");
+assert(listingScore({ score: 2400, ups: 12 }) === 2400, "viral score");
+assert(listingScore({ ups: 80 }) === 80, "viral ups");
+
+const picturePost = redditClip(
+  {
+    title: "Photo",
+    permalink: "/r/oddlysatisfying/comments/abc123/photo/",
+    url: "https://i.redd.it/example.jpg",
+  },
+  "reel",
+);
+assert(picturePost === null, "pictures are not reels");
+assert(shelfFormat("video", "https://www.youtube.com/watch?v=aqz-KE-bpKQ", false, true) === "video", "long videos stay videos");
+assert(shelfFormat("video", "https://www.youtube.com/shorts/aqz-KE-bpKQ", true, true) === "reel", "shorts move to reels");
+assert(shelfFormat("reel", "https://www.youtube.com/shorts/aqz-KE-bpKQ", true, true) === "reel", "shorts on the reel shelf stay reels");
+const longReddit = redditClip(
+  {
+    title: "A long upload",
+    permalink: "/r/videos/comments/abc123/a_long_upload/",
+    url: "https://www.youtube.com/watch?v=aqz-KE-bpKQ",
+  },
+  "video",
+);
+assert(longReddit?.format === "video", longReddit?.format || "long YouTube uploads belong on videos");
 
 const tiktok = toEmbedUrl("https://www.tiktok.com/@reader/video/1234567890123456789");
 assert(tiktok === "https://www.tiktok.com/embed/v2/1234567890123456789", tiktok || "missing tiktok embed");
@@ -109,6 +181,7 @@ const manifest = manifestIcons(
   "https://www.example.com/manifest.webmanifest",
 );
 assert(manifest[0]?.href === "https://www.example.com/icons/512.png", manifest[0]?.href || "missing manifest icon");
+assert(manifest.some((icon) => icon.href === "https://www.example.com/512.png"), "manifest icon beside the manifest");
 
 const png = Buffer.alloc(24);
 png.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52]);

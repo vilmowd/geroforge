@@ -9,7 +9,7 @@ import { CommentThread } from "@/components/CommentThread";
 import { VoteButton } from "@/components/VoteButton";
 import type { CommentNode } from "@/lib/comments";
 import { useSharpPicture } from "@/components/useSharpPicture";
-import { canonicalVideoPage, playbackEmbedSrc } from "@/lib/embed";
+import { canonicalVideoPage, playbackEmbedSrc, youtubeVideoId } from "@/lib/embed";
 import { siteHost } from "@/lib/site-mark";
 import { pictureSources } from "@/lib/thumbnails";
 import type { FeedCard, FeedFilter } from "@/lib/feed";
@@ -260,8 +260,10 @@ export function WatchFeed({
 
   const commentPost = posts.find((post) => post.id === commentsFor) || null;
 
+  const reelStage = filter === "reels";
+
   return (
-    <div className="watch-screen">
+    <div className={`watch-screen ${reelStage ? "watch-reels" : ""}`}>
       <div ref={scroller} className="watch-scroller">
         {posts.map((post, index) => (
           <WatchSlide
@@ -270,6 +272,7 @@ export function WatchFeed({
             active={index === active}
             authenticated={authenticated}
             onComments={() => setCommentsFor(post.id)}
+            soft={reelStage}
           />
         ))}
         {cursor ? <div className="watch-slide watch-more skeleton" aria-hidden="true" /> : null}
@@ -324,11 +327,13 @@ function WatchSlide({
   active,
   authenticated,
   onComments,
+  soft,
 }: {
   post: FeedCard;
   active: boolean;
   authenticated: boolean;
   onComments: () => void;
+  soft?: boolean;
 }) {
   const video = Boolean(post.embedUrl && (post.format === "video" || post.format === "reel" || post.contentType === "VIDEO_EMBED"));
   const source = safeHttp(post.sourceUrl) || (post.embedUrl ? canonicalVideoPage(post.embedUrl) : null);
@@ -339,13 +344,24 @@ function WatchSlide({
   return (
     <section className="watch-slide relative h-full overflow-hidden bg-black" aria-label={post.title}>
       <div className="absolute inset-0 flex items-center justify-center">
-        {video && post.embedUrl ? (
+        {video && post.embedUrl && active ? (
           <ReelPlayer
             embedUrl={post.embedUrl}
             title={post.title}
             poster={post.thumbnailUrl ? pictureSources(post.thumbnailUrl)[0] || post.thumbnailUrl : null}
-            active={active}
             tall={post.format === "reel"}
+            host={siteHost(post.sourceUrl, post.embedUrl)}
+            category={post.category}
+            format={post.format}
+          />
+        ) : video ? (
+          <FramedStill
+            tall={post.format === "reel"}
+            src={post.thumbnailUrl}
+            title={post.title}
+            category={post.category}
+            format={post.format}
+            host={siteHost(post.sourceUrl, post.embedUrl)}
           />
         ) : post.thumbnailUrl ? (
           <StillImage
@@ -363,7 +379,7 @@ function WatchSlide({
           </div>
         )}
       </div>
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex items-end gap-3 bg-gradient-to-t from-black via-black/80 to-transparent px-4 pb-[calc(4.6rem+env(safe-area-inset-bottom))] pt-16">
+      <div className={`pointer-events-none absolute inset-x-0 bottom-0 z-10 flex items-end gap-3 bg-gradient-to-t px-4 pb-[calc(4.6rem+env(safe-area-inset-bottom))] pt-16 ${soft ? "from-[#242428] via-[#242428]/80" : "from-black via-black/80"} to-transparent`}>
         <div className="pointer-events-auto min-w-0 flex-1">
           <h2 className={playerShowsTitle ? "sr-only" : "text-lg font-extrabold leading-tight"}>{post.title}</h2>
           {note ? <p className="mt-2 line-clamp-4 text-[15px] leading-6 text-white/92">{note}</p> : null}
@@ -457,6 +473,37 @@ function ShareButton({ title, slug }: { title: string; slug: string }) {
   );
 }
 
+function FramedStill({
+  tall,
+  src,
+  title,
+  category,
+  format,
+  host,
+}: {
+  tall: boolean;
+  src: string | null;
+  title: string;
+  category: string;
+  format: FeedCard["format"];
+  host: string | null;
+}) {
+  const frame = tall
+    ? "relative h-[100dvh] w-[min(100vw,calc(100dvh*9/16))] overflow-hidden bg-black"
+    : "relative h-[min(100dvh,calc(100vw*9/16))] w-[min(100vw,calc(100dvh*16/9))] overflow-hidden bg-black";
+  return (
+    <div className={frame}>
+      {src ? (
+        <StillImage src={src} title={title} category={category} format={format} host={host} />
+      ) : (
+        <SiteMark host={host} large>
+          <ContentPoster title={title} category={category} format={format} />
+        </SiteMark>
+      )}
+    </div>
+  );
+}
+
 function StillImage({
   src,
   title,
@@ -471,7 +518,8 @@ function StillImage({
   host: string | null;
 }) {
   const picture = useSharpPicture(src);
-  if (!picture.src) {
+  const [failed, setFailed] = useState(false);
+  if (!picture.src || failed) {
     return (
       <div className="relative h-full w-full">
         <SiteMark host={host} large>
@@ -486,7 +534,17 @@ function StillImage({
       alt=""
       referrerPolicy="no-referrer"
       className="absolute inset-0 h-full w-full object-cover"
+      onError={() => setFailed(true)}
     />
+  );
+}
+
+function ClipSpinner() {
+  return (
+    <div className="pointer-events-none absolute inset-0 z-[2] flex items-center justify-center" role="status">
+      <span className="sr-only">Loading video</span>
+      <span className="clip-spinner" />
+    </div>
   );
 }
 
@@ -494,81 +552,147 @@ function ReelPlayer({
   embedUrl,
   title,
   poster,
-  active,
   tall,
+  host,
+  category,
+  format,
 }: {
   embedUrl: string;
   title: string;
   poster: string | null;
-  active: boolean;
   tall: boolean;
+  host: string | null;
+  category: string;
+  format: FeedCard["format"];
 }) {
+  recallPlayback();
   const [muted, setMuted] = useVideosMuted();
   const [shownSrc, setShownSrc] = useState<string | null>(null);
-  const frameRef = useRef<HTMLIFrameElement>(null);
+  const [started, setStarted] = useState(false);
+  const [posterFailed, setPosterFailed] = useState(false);
+  const slotRef = useRef<HTMLDivElement>(null);
+  const armed = useRef(false);
   const mutedRef = useRef(muted);
-  const kickRef = useRef<() => void>(() => {});
   mutedRef.current = muted;
-  const src = active ? playbackEmbedSrc(embedUrl) : null;
+  const src = playbackEmbedSrc(embedUrl);
   const ready = Boolean(src) && shownSrc === src;
+  const playbackHost = src ? frameHostFrom(src) : "";
+  const reportsPlayback = isYouTubeHost(playbackHost) || playbackHost === "player.vimeo.com";
+  const waiting = !ready || (reportsPlayback && !started);
   const frame = tall
     ? "h-[100dvh] w-[min(100vw,calc(100dvh*9/16))]"
     : "h-[min(100dvh,calc(100vw*9/16))] w-[min(100vw,calc(100dvh*16/9))]";
 
+  useLayoutEffect(() => {
+    return () => {
+      parkPlayer();
+    };
+  }, []);
+
+  useLayoutEffect(() => {
+    const slot = slotRef.current;
+    if (!slot || !src) return;
+    const player = playerNode();
+    if (player.parentElement !== slot) slot.appendChild(player);
+    player.title = title;
+  });
+
   useEffect(() => {
     if (!src) return;
-    setMuted(true);
+    let stopped = false;
+    let triedSound = false;
+    let unmuteAt = 0;
+    let playing = false;
+    function playerNow() {
+      return stopped ? null : playerNode();
+    }
+    function onReady() {
+      const player = playerNow();
+      if (!player || playing) return;
+      const id = youtubeVideoId(src);
+      setShownSrc(src);
+      beginClip(player, id && player.dataset.video !== id ? id : null, mutedRef.current || soundBlocked);
+      armed.current = true;
+    }
+    function onMessage(event: MessageEvent) {
+      const player = playerNow();
+      if (!player || event.source !== player.contentWindow) return;
+      const state = readPlayerState(event);
+      if (state === null) return;
+      if (state === 3 && armed.current) setStarted(false);
+      if (state === 1) {
+        playing = true;
+        if (armed.current) setStarted(true);
+      }
+      if (state === 0) {
+        sendPlayer(player, "seekTo", [0, true]);
+        sendPlayer(player, "playVideo");
+        return;
+      }
+      if (state === 1 && !mutedRef.current && !soundBlocked && !triedSound) {
+        triedSound = true;
+        unmuteAt = Date.now();
+        sendPlayer(player, "unMute");
+        sendPlayer(player, "setVolume", [100]);
+        return;
+      }
+      if (triedSound && (state === 2 || state === -1 || state === 5) && Date.now() - unmuteAt < 1800) {
+        triedSound = false;
+        soundBlocked = true;
+        setMuted(true);
+        sendPlayer(player, "mute");
+        sendPlayer(player, "playVideo");
+      }
+    }
+    window.addEventListener("forge-player-ready", onReady);
+    window.addEventListener("message", onMessage);
+    const retry = window.setTimeout(() => {
+      const player = playerNow();
+      if (!player || player.dataset.ready === "1") return;
+      onReady();
+    }, 900);
+    return () => {
+      stopped = true;
+      window.removeEventListener("forge-player-ready", onReady);
+      window.removeEventListener("message", onMessage);
+      window.clearTimeout(retry);
+    };
   }, [src, setMuted]);
 
   useEffect(() => {
-    if (!src || !ready) return;
-    let stopped = false;
-    function playMuted() {
-      const frame = stopped ? null : frameRef.current;
-      if (!frame?.contentWindow) return;
-      const host = frameHost(frame);
-      if (host === "www.youtube.com" || host === "www.youtube-nocookie.com") {
-        frame.contentWindow.postMessage(JSON.stringify({ event: "listening", id: 1, channel: "widget" }), "*");
-        sendPlayer(frame, "mute");
-        sendPlayer(frame, "playVideo");
-        return;
-      }
-      if (host === "player.vimeo.com") {
-        frame.contentWindow.postMessage({ method: "setVolume", value: 0 }, "https://player.vimeo.com");
-        frame.contentWindow.postMessage({ method: "play" }, "https://player.vimeo.com");
-      }
+    if (!src) return;
+    setStarted(false);
+    armed.current = false;
+    const giveUp = window.setTimeout(() => setStarted(true), 8000);
+    const player = playerNode();
+    const id = youtubeVideoId(src);
+    const nextHost = frameHostFrom(src);
+    const currentHost = player.src ? frameHost(player) : "";
+    const sameYouTube = isYouTubeHost(nextHost) && isYouTubeHost(currentHost);
+    if (player.dataset.ready === "1" && id && sameYouTube && player.dataset.video !== id) {
+      beginClip(player, id, mutedRef.current || soundBlocked);
+      armed.current = true;
+      setShownSrc(src);
+      return () => window.clearTimeout(giveUp);
     }
-    function onMessage(event: MessageEvent) {
-      const frame = stopped ? null : frameRef.current;
-      if (!frame || event.source !== frame.contentWindow) return;
-      let data: { event?: string } | null = null;
-      if (typeof event.data === "string") {
-        try {
-          data = JSON.parse(event.data) as { event?: string };
-        } catch {
-          return;
-        }
-      } else if (event.data && typeof event.data === "object") {
-        data = event.data as { event?: string };
-      }
-      if (data?.event === "onReady") playMuted();
+    if (player.src !== src) {
+      player.dataset.ready = "";
+      player.dataset.video = id || "";
+      setShownSrc(null);
+      player.src = src;
+    } else if (player.dataset.ready === "1") {
+      beginClip(player, null, true);
+      armed.current = true;
+      setShownSrc(src);
     }
-    kickRef.current = playMuted;
-    window.addEventListener("message", onMessage);
-    const timers = [0, 400, 1200].map((delay) => window.setTimeout(playMuted, delay));
-    return () => {
-      stopped = true;
-      kickRef.current = () => {};
-      window.removeEventListener("message", onMessage);
-      timers.forEach((timer) => window.clearTimeout(timer));
-    };
-  }, [src, ready]);
+    return () => window.clearTimeout(giveUp);
+  }, [src]);
 
   function toggleSound() {
     const next = !mutedRef.current;
+    soundBlocked = false;
     setMuted(next);
-    const player = frameRef.current;
-    if (!player) return;
+    const player = playerNode();
     if (frameHost(player) === "player.vimeo.com") {
       player.contentWindow?.postMessage({ method: "setVolume", value: next ? 0 : 1 }, "https://player.vimeo.com");
       if (!next) player.contentWindow?.postMessage({ method: "play" }, "https://player.vimeo.com");
@@ -585,25 +709,23 @@ function ReelPlayer({
 
   return (
     <div className={`relative overflow-hidden bg-black ${frame}`}>
-      {!ready && !poster ? <span className="skeleton absolute inset-0" /> : null}
-      {src ? (
-        <iframe
-          ref={frameRef}
-          key={src}
-          src={src}
-          title={title}
-          className="absolute inset-0 h-full w-full"
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen"
-          allowFullScreen
-          referrerPolicy="strict-origin-when-cross-origin"
-          onLoad={() => {
-            setShownSrc(src);
-            kickRef.current();
-          }}
+      {!ready && (!poster || posterFailed) ? (
+        <SiteMark host={host} large>
+          <ContentPoster title={title} category={category} format={format} />
+        </SiteMark>
+      ) : null}
+      <div ref={slotRef} className="absolute inset-0" />
+      {poster && !posterFailed && !ready ? (
+        <img
+          src={poster}
+          alt=""
+          referrerPolicy="no-referrer"
+          className="absolute inset-0 z-[1] h-full w-full object-cover"
+          onError={() => setPosterFailed(true)}
         />
       ) : null}
-      {poster && !ready ? <img src={poster} alt="" referrerPolicy="no-referrer" className="absolute inset-0 z-[1] h-full w-full object-cover" /> : null}
-      {src && active ? (
+      {waiting ? <ClipSpinner /> : null}
+      {src ? (
         <button
           type="button"
           className="absolute right-3 top-3 z-10 rounded-full bg-black/60 p-2"
@@ -617,8 +739,85 @@ function ReelPlayer({
   );
 }
 
-let videosMuted = true;
+let videosMuted = false;
+let soundBlocked = false;
+let sharedPlayer: HTMLIFrameElement | null = null;
 const muteListeners = new Set<(muted: boolean) => void>();
+
+export function armPlayback() {
+  videosMuted = false;
+  soundBlocked = false;
+  try {
+    sessionStorage.setItem("forge_sound", String(Date.now()));
+  } catch {
+    // Private browsing can block storage. The open tap still counts in this page.
+  }
+  muteListeners.forEach((listener) => listener(false));
+}
+
+function recallPlayback() {
+  try {
+    const raw = sessionStorage.getItem("forge_sound");
+    if (!raw) return;
+    sessionStorage.removeItem("forge_sound");
+    if (Date.now() - Number(raw) < 10000) {
+      videosMuted = false;
+      soundBlocked = false;
+    }
+  } catch {
+    // Ignore storage failures.
+  }
+}
+
+function playerNode(): HTMLIFrameElement {
+  if (sharedPlayer) return sharedPlayer;
+  const frame = document.createElement("iframe");
+  frame.className = "absolute inset-0 h-full w-full bg-black";
+  frame.allow = "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen";
+  frame.allowFullscreen = true;
+  frame.referrerPolicy = "strict-origin-when-cross-origin";
+  frame.addEventListener("load", () => {
+    frame.dataset.ready = "1";
+    window.dispatchEvent(new Event("forge-player-ready"));
+  });
+  sharedPlayer = frame;
+  return frame;
+}
+
+function parkPlayer() {
+  if (!sharedPlayer) return;
+  let park = document.getElementById("forge-player-park");
+  if (!park) {
+    park = document.createElement("div");
+    park.id = "forge-player-park";
+    park.hidden = true;
+    document.body.appendChild(park);
+  }
+  park.appendChild(sharedPlayer);
+  sendPlayer(sharedPlayer, "pauseVideo");
+}
+
+function beginClip(frame: HTMLIFrameElement, videoId: string | null, startMuted: boolean) {
+  const host = frameHost(frame);
+  if (isYouTubeHost(host)) {
+    frame.contentWindow?.postMessage(JSON.stringify({ event: "listening", id: 1, channel: "widget" }), "*");
+    if (videoId) {
+      frame.dataset.video = videoId;
+      sendPlayer(frame, "loadVideoById", [{ videoId, startSeconds: 0 }]);
+    }
+    if (startMuted) sendPlayer(frame, "mute");
+    else {
+      sendPlayer(frame, "unMute");
+      sendPlayer(frame, "setVolume", [100]);
+    }
+    sendPlayer(frame, "playVideo");
+    return;
+  }
+  if (host === "player.vimeo.com") {
+    frame.contentWindow?.postMessage({ method: "setVolume", value: startMuted ? 0 : 1 }, "https://player.vimeo.com");
+    frame.contentWindow?.postMessage({ method: "play" }, "https://player.vimeo.com");
+  }
+}
 
 function useVideosMuted() {
   const [muted, setMuted] = useState(videosMuted);
@@ -644,14 +843,53 @@ function readingNote(post: FeedCard): string | null {
 }
 
 function frameHost(frame: HTMLIFrameElement): string {
+  return frameHostFrom(frame.src);
+}
+
+function frameHostFrom(value: string): string {
   try {
-    return new URL(frame.src).hostname;
+    return new URL(value).hostname;
   } catch {
     return "";
   }
 }
 
-function sendPlayer(frame: HTMLIFrameElement | null, func: "mute" | "unMute" | "playVideo" | "setVolume", args: unknown[] = []) {
+function isYouTubeHost(host: string): boolean {
+  return host === "www.youtube.com" || host === "www.youtube-nocookie.com";
+}
+
+function readPlayerState(event: MessageEvent): number | null {
+  if (event.origin === "https://player.vimeo.com") {
+    const data = event.data as { event?: string } | null;
+    if (data?.event === "play") return 1;
+    if (data?.event === "pause") return 2;
+    if (data?.event === "ended") return 0;
+    return null;
+  }
+  let data: { event?: string; info?: unknown } | null = null;
+  if (typeof event.data === "string") {
+    try {
+      data = JSON.parse(event.data) as { event?: string; info?: unknown };
+    } catch {
+      return null;
+    }
+  } else if (event.data && typeof event.data === "object") {
+    data = event.data as { event?: string; info?: unknown };
+  }
+  if (!data?.event || data.event === "onReady") return null;
+  const delivered =
+    data.event === "infoDelivery" && data.info && typeof data.info === "object"
+      ? (data.info as { playerState?: unknown }).playerState
+      : undefined;
+  const state = data.event === "onStateChange" ? Number(data.info) : Number(delivered);
+  return Number.isInteger(state) ? state : null;
+}
+
+function sendPlayer(
+  frame: HTMLIFrameElement | null,
+  func: "mute" | "unMute" | "playVideo" | "pauseVideo" | "setVolume" | "loadVideoById" | "seekTo",
+  args: unknown[] = [],
+) {
   frame?.contentWindow?.postMessage(JSON.stringify({ event: "command", func, args }), "*");
 }
 

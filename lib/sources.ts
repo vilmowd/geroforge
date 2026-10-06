@@ -8,13 +8,27 @@ export type Source = {
   format: ShelfFormat;
 };
 
+function channelTail(channelId: string): string {
+  return channelId.startsWith("UC") ? channelId.slice(2) : channelId;
+}
+
 function youtube(channelId: string, sourceName: string, categoryHint: string): Source {
   return {
     kind: "youtube",
-    url: `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`,
+    url: `https://www.youtube.com/feeds/videos.xml?playlist_id=UULF${channelTail(channelId)}`,
     sourceName,
     categoryHint,
     format: "video",
+  };
+}
+
+function youtubeShorts(channelId: string, name: string, categoryHint: string): Source {
+  return {
+    kind: "youtube",
+    url: `https://www.youtube.com/feeds/videos.xml?playlist_id=UUSH${channelTail(channelId)}`,
+    sourceName: `YouTube Shorts / ${name}`,
+    categoryHint,
+    format: "reel",
   };
 }
 
@@ -23,12 +37,23 @@ function feed(url: string, sourceName: string, categoryHint: string, format: She
 }
 
 function reddit(subreddit: string, categoryHint: string, format: ShelfFormat): Source {
-  return feed(
-    `https://www.reddit.com/r/${subreddit}/top/.rss?t=day`,
-    `Reddit /r/${subreddit}`,
+  return {
+    kind: "reddit",
+    url: `https://www.reddit.com/r/${subreddit}/top.json?limit=25&t=day`,
+    sourceName: `Reddit /r/${subreddit}`,
     categoryHint,
     format,
-  );
+  };
+}
+
+function redditPopular(name: string, subs: string[], categoryHint: string, format: ShelfFormat): Source {
+  return {
+    kind: "reddit",
+    url: `https://www.reddit.com/r/${subs.join("+")}/top.json?limit=25&t=day`,
+    sourceName: name,
+    categoryHint,
+    format,
+  };
 }
 
 export const SOURCES: Source[] = [
@@ -39,29 +64,34 @@ export const SOURCES: Source[] = [
   youtube("UCpVm7bg6pXKo1Pr6k5kxG9A", "YouTube / National Geographic", "Science"),
   youtube("UCLXo7UDZvByw2ixzpQCufnA", "YouTube / Vox", "World"),
   youtube("UCY1kMZp36IQSyNx_9h4mpCg", "YouTube / Mark Rober", "Science"),
-  youtube("UC6107grRI4m0o2-emgoDnAA", "YouTube / SmarterEveryDay", "Science"),
   youtube("UCknLrEdhRCp1aegoMqRaCZg", "YouTube / DW News", "World"),
-  youtube("UCX6OQ3DkcsbYNE6H8uQQuVA", "YouTube / MrBeast", "Entertainment"),
   youtube("UCBJycsmduvYEL83R_U4JriQ", "YouTube / MKBHD", "Technology"),
   youtube("UCXuqSBlHAE6Xw-yeJA0Tunw", "YouTube / Linus Tech Tips", "Technology"),
-  youtube("UCBa659QWEk1AI4Tg--mrJ2A", "YouTube / Tom Scott", "Technology"),
-  youtube("UCFhXFikryT4aFcLkLw2LBLA", "YouTube / NileRed", "Science"),
-  youtube("UCUK0HBIBWgM2c4vsPhkYY4w", "YouTube / The Slow Mo Guys", "Entertainment"),
-  youtube("UCRijo3ddMTht_IHyNSNXpNQ", "YouTube / Dude Perfect", "Entertainment"),
-  youtube("UCvK4bOhULCpmLabd2pDMtnA", "YouTube / Yes Theory", "Entertainment"),
-  youtube("UCsn6cjffsvyOZCZxvGoJxGg", "YouTube / Corridor Crew", "Entertainment"),
-  youtube("UCo8bcnLyZH8tBIH9V1mLgqQ", "YouTube / TheOdd1sOut", "Entertainment"),
-  youtube("UCR1D15p_vdP3HkrH8wgjQRw", "YouTube / Internet Historian", "Entertainment"),
-  youtube("UCHu2KNu6TtJ0p4hpSW7Yv7Q", "YouTube / Jazza", "Entertainment"),
-  youtube("UCRcgy6GzDeccI7dkbbBna3Q", "YouTube / Lemmino", "Entertainment"),
   youtube("UC7DdEm33SyaTDtWYGO2CwdA", "YouTube / Physics Girl", "Science"),
-  youtube("UC5f5IV0Bf79YLp_p9nfInRA", "YouTube / How Ridiculous", "Entertainment"),
-  youtube("UCJHA_jMfCvEnv-3kRjTCQXw", "YouTube / Binging with Babish", "Entertainment"),
-  youtube("UCbfYPyITQ-7l4upoX8nvctg", "YouTube / Two Minute Papers", "AI"),
-  youtube("UCsBjURrPoezykLs9EqgamOA", "YouTube / Fireship", "Development"),
   youtube("UCYO_jab_esuFRV4b17AJtAw", "YouTube / 3Blue1Brown", "Science"),
-  youtube("UCq8DICunczvLuJJq414110A", "YouTube / Zach King", "Entertainment"),
-  youtube("UCPDis9pjXuqyI7RYLJ-TTSA", "YouTube / FailArmy", "Entertainment"),
+  youtube("UCLA_DiR1FfKNvjuUpBHmylQ", "YouTube / NASA", "Science"),
+  youtube("UCoxcjq-8xIDTYp3uz647V5A", "YouTube / Numberphile", "Science"),
+  youtube("UCC552Sd-3nyi_tk2BudLUzA", "YouTube / AsapSCIENCE", "Science"),
+  youtube("UChqUTb7kYRX8-EiaN3XFrSQ", "YouTube / Reuters", "World"),
+  youtube("UC52X5wxOL_s5yw0dQk7NtgA", "YouTube / Associated Press", "World"),
+  youtube("UCNye-wNBqNL5ZzHSJj3l8Bg", "YouTube / Al Jazeera English", "World"),
+  youtube("UCCCPCZNChQdGa9EkATeye4g", "YouTube / FRANCE 24", "World"),
+  youtube("UC9x0AN7BWHpCDHSm9NiJFJQ", "YouTube / NetworkChuck", "Technology"),
+  youtube("UC8butISFwT-Wl7EV0hUK0BQ", "YouTube / freeCodeCamp", "Development"),
+  youtubeShorts("UCq8DICunczvLuJJq414110A", "Zach King", "Entertainment"),
+  youtubeShorts("UCPDis9pjXuqyI7RYLJ-TTSA", "FailArmy", "Entertainment"),
+  youtubeShorts("UCX6OQ3DkcsbYNE6H8uQQuVA", "MrBeast", "Entertainment"),
+  youtubeShorts("UCRijo3ddMTht_IHyNSNXpNQ", "Dude Perfect", "Entertainment"),
+  youtubeShorts("UC5f5IV0Bf79YLp_p9nfInRA", "How Ridiculous", "Entertainment"),
+  youtubeShorts("UCo8bcnLyZH8tBIH9V1mLgqQ", "TheOdd1sOut", "Entertainment"),
+  youtubeShorts("UCHu2KNu6TtJ0p4hpSW7Yv7Q", "Jazza", "Entertainment"),
+  youtubeShorts("UCSpFnDQr88xCZ80N-X7t0nQ", "Corridor Crew", "Entertainment"),
+  youtubeShorts("UCWJ2lWNubArHWmf3FIHbfcQ", "NBA", "Entertainment"),
+  youtubeShorts("UCB_qr75-ydFVKSF9Dmo6izg", "FORMULA 1", "Entertainment"),
+  youtubeShorts("UCblfuW_4rakIf2h6aqANefA", "Red Bull", "Entertainment"),
+  youtubeShorts("UC3KEoMzNz8eYnwBC34RaKCQ", "Simone Giertz", "Entertainment"),
+  youtubeShorts("UCp68_FLety0O-n9QU6phsgw", "colinfurze", "Entertainment"),
+  youtubeShorts("UCajXeitgFL-rb5-gXI-aG8Q", "Great Big Story", "Entertainment"),
 
   feed("https://vimeo.com/channels/staffpicks/videos/rss", "Vimeo / Staff Picks", "Entertainment", "video"),
 
@@ -108,6 +138,37 @@ export const SOURCES: Source[] = [
   reddit("oddlysatisfying", "Entertainment", "reel"),
   reddit("youtubehaiku", "Entertainment", "reel"),
   reddit("TikTokCringe", "Entertainment", "reel"),
+  reddit("BetterEveryLoop", "Entertainment", "reel"),
+  reddit("AnimalsBeingDerps", "Entertainment", "reel"),
+  reddit("AnimalsBeingBros", "Entertainment", "reel"),
+  reddit("ArtisanVideos", "Entertainment", "reel"),
+  reddit("cookingvideos", "Entertainment", "reel"),
+  reddit("blackmagicfuckery", "Entertainment", "reel"),
+  reddit("perfectfit", "Entertainment", "reel"),
   reddit("MadeMeSmile", "Entertainment", "post"),
   reddit("InternetIsBeautiful", "Technology", "post"),
+  redditPopular(
+    "Reddit / popular clips",
+    [
+      "TikTok",
+      "youtubehaiku",
+      "oddlysatisfying",
+      "BetterEveryLoop",
+      "AnimalsBeingDerps",
+      "AnimalsBeingBros",
+      "ArtisanVideos",
+      "cookingvideos",
+      "blackmagicfuckery",
+      "perfectfit",
+      "TikTokCringe",
+    ],
+    "Entertainment",
+    "reel",
+  ),
+  redditPopular(
+    "Reddit / popular videos",
+    ["videos", "nextfuckinglevel", "BeAmazed", "interestingasfuck", "ContagiousLaughter", "Damnthatsinteresting"],
+    "Entertainment",
+    "video",
+  ),
 ];

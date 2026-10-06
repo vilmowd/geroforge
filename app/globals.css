@@ -76,6 +76,11 @@ body {
   color: #fff;
 }
 
+.watch-screen.watch-reels,
+.watch-reels .watch-slide {
+  background: #242428;
+}
+
 .watch-scroller {
   height: 100%;
   overflow-y: auto;
@@ -87,6 +92,23 @@ body {
   height: 100%;
   scroll-snap-align: start;
   scroll-snap-stop: normal;
+}
+
+.clip-spinner {
+  width: 3.25rem;
+  height: 3.25rem;
+  border-radius: 999px;
+  border: 3px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+  background: rgba(0, 0, 0, 0.28);
+  box-shadow: 0 0 0 10px rgba(0, 0, 0, 0.22);
+  animation: clip-spin 0.8s linear infinite;
+}
+
+@keyframes clip-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .post-widget {
@@ -348,7 +370,8 @@ html[data-focus="on"] :focus-visible {
   .swipe-bob,
   .sheet-up,
   .vote-pop,
-  .like-btn.is-pop::after {
+  .like-btn.is-pop::after,
+  .clip-spinner {
     animation: none !important;
   }
 

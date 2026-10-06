@@ -2,65 +2,65 @@
 
 import { useEffect, useRef, useState } from "react";
 
-function fittedMark(image: HTMLImageElement, large: boolean): number {
-  const measured = image.naturalWidth > 0 ? Math.min(image.naturalWidth, image.naturalHeight || image.naturalWidth) : 512;
-  const dpr = Math.min(window.devicePixelRatio || 1, 3);
-  const frame = image.parentElement?.getBoundingClientRect();
-  const edge = Math.min(frame?.width || 280, frame?.height || 280);
-  const design = large
-    ? Math.round(Math.min(320, Math.max(160, edge * 0.42)))
-    : Math.round(Math.min(112, Math.max(64, edge * 0.4)));
-  const sharp = Math.floor(measured / dpr);
-  if (sharp < 40) return 0;
-  return Math.min(design, sharp);
-}
+const MARK_VERSION = "5";
 
 export function SiteMark({
   host,
-  large = false,
   children,
 }: {
   host: string | null;
   large?: boolean;
   children: React.ReactNode;
 }) {
-  const imageRef = useRef<HTMLImageElement>(null);
+  const photoRef = useRef<HTMLImageElement>(null);
   const [phase, setPhase] = useState<"loading" | "ready" | "bad">(host ? "loading" : "bad");
-  const [px, setPx] = useState(large ? 180 : 88);
-
-  function reveal(image: HTMLImageElement) {
-    const next = fittedMark(image, large);
-    if (!next) {
-      setPhase("bad");
-      return;
-    }
-    setPx(next);
-    setPhase("ready");
-  }
+  const [px, setPx] = useState(0);
 
   useEffect(() => {
-    const image = imageRef.current;
-    if (!image?.complete || image.naturalWidth <= 0) return;
-    reveal(image);
-  }, [host, large]);
+    const image = photoRef.current;
+    const frame = image?.parentElement;
+    if (!image || !frame || !host) return;
+
+    const place = () => {
+      if (!image.complete || image.naturalWidth <= 0) return;
+      const box = frame.getBoundingClientRect();
+      const edge = Math.min(box.width, box.height);
+      if (edge < 80) return;
+      const dpr = Math.min(window.devicePixelRatio || 1, 3);
+      const half = edge * 0.5;
+      const sharp = image.naturalWidth / dpr;
+      const next = Math.round(image.naturalWidth >= 256 ? half : Math.min(half, sharp));
+      if (next < 40) {
+        setPhase("bad");
+        return;
+      }
+      setPx(next);
+      setPhase("ready");
+    };
+
+    place();
+    image.addEventListener("load", place);
+    const observer = new ResizeObserver(place);
+    observer.observe(frame);
+    return () => {
+      image.removeEventListener("load", place);
+      observer.disconnect();
+    };
+  }, [host]);
 
   if (!host || phase === "bad") return children;
 
   return (
-    <div className="absolute inset-0 flex items-center justify-center bg-white">
+    <div className="absolute inset-0 bg-white">
       {phase === "loading" ? <span className="skeleton pointer-events-none absolute inset-0" /> : null}
       <img
-        ref={imageRef}
-        src={`/api/mark?host=${encodeURIComponent(host)}`}
+        ref={photoRef}
+        src={`/api/mark?host=${encodeURIComponent(host)}&v=${MARK_VERSION}`}
         alt=""
-        width={px}
-        height={px}
         decoding="async"
         draggable={false}
-        referrerPolicy="no-referrer"
-        className={`relative z-[1] object-contain ${large ? "max-h-[min(320px,52%)] max-w-[min(320px,70%)]" : "max-h-[46%] max-w-[46%]"} ${phase === "ready" ? "opacity-100" : "opacity-0"}`}
-        style={{ width: px, height: px }}
-        onLoad={(event) => reveal(event.currentTarget)}
+        className={`absolute left-1/2 top-1/2 z-[1] -translate-x-1/2 -translate-y-1/2 object-contain ${phase === "ready" ? "opacity-100" : "opacity-0"}`}
+        style={px ? { width: px, height: px } : undefined}
         onError={() => setPhase("bad")}
       />
     </div>

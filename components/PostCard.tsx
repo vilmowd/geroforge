@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Clapperboard, Globe2, MessagesSquare, Newspaper, Play, ScrollText } from "lucide-react";
 import { ContentPoster } from "@/components/ContentPoster";
 import { SiteMark } from "@/components/SiteMark";
+import { armPlayback } from "@/components/WatchFeed";
 import { canonicalVideoPage } from "@/lib/embed";
 import { siteHost } from "@/lib/site-mark";
 import { cardPicture } from "@/lib/thumbnails";
@@ -36,6 +37,7 @@ export function PostCard({
   const modest = cardPicture(post.thumbnailUrl);
   const [src, setSrc] = useState(modest || "");
   const [phase, setPhase] = useState<"loading" | "ready" | "missing">(modest ? "loading" : "missing");
+  const photoRef = useRef<HTMLImageElement>(null);
   const Icon =
     format === "news"
       ? Newspaper
@@ -52,6 +54,13 @@ export function PostCard({
   const eager = index < 4;
   const frame = cardFrame(post);
 
+  useEffect(() => {
+    const image = photoRef.current;
+    if (!image?.complete) return;
+    if (image.naturalWidth > 0) setPhase("ready");
+    else setPhase("missing");
+  }, [src]);
+
   return (
     <article
       className={`feed-card post-widget relative flex w-full flex-col overflow-hidden rounded-[22px] bg-white text-cream shadow-card max-sm:active:scale-[0.985] sm:rounded-[28px] ${className}`}
@@ -62,7 +71,9 @@ export function PostCard({
         href={`/posts/${post.slug}`}
         aria-label={post.title}
         onClick={(event) => {
-          if (!onOpen || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
+          if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
+          armPlayback();
+          if (!onOpen) return;
           event.preventDefault();
           onOpen();
         }}
@@ -77,6 +88,7 @@ export function PostCard({
         ) : null}
         {phase !== "missing" && src ? (
           <img
+            ref={photoRef}
             src={src}
             alt=""
             width={480}

@@ -24,6 +24,7 @@ const flights = new Map<string, Promise<SiteMarkFile | null>>();
 const HIT_MS = 24 * 60 * 60 * 1000;
 const MISS_MS = 15 * 60 * 1000;
 const CACHE_MAX = 180;
+const CACHE_VERSION = "5";
 
 export function siteHost(sourceUrl: string | null, embedUrl: string | null): string | null {
   const page = httpPage(sourceUrl) || (embedUrl ? canonicalVideoPage(embedUrl) : null);
@@ -48,7 +49,7 @@ export function iconChoices(markup: string, pageUrl: string): IconChoice[] {
     const type = attr(tag, "type").toLowerCase();
     const declared = declaredSize(attr(tag, "sizes"));
     let score = declared ? declared * 10 : rel.includes("apple-touch-icon") ? 1800 : 320;
-    if (type.includes("svg") || /\.svg(\?|$)/i.test(href)) score = Math.max(score, 2500);
+    if (type.includes("svg") || /\.svg(\?|$)/i.test(href)) score = Math.max(score, 60_000);
     found.push({ href, score });
   }
   return dedupe(found);
@@ -84,9 +85,11 @@ export function manifestIcons(body: string, pageUrl: string): IconChoice[] {
     const type = typeof icon.type === "string" ? icon.type.toLowerCase() : "";
     const declared = declaredSize(typeof icon.sizes === "string" ? icon.sizes : "");
     let score = declared ? declared * 10 : 640;
-    if (type.includes("svg") || /\.svg(\?|$)/i.test(href)) score = Math.max(score, 2500);
+    if (type.includes("svg") || /\.svg(\?|$)/i.test(href)) score = Math.max(score, 60_000);
     if (purpose.includes("maskable") && !purpose.includes("any")) score -= 200;
     found.push({ href, score });
+    const beside = besideManifest(icon.src, pageUrl);
+    if (beside && beside !== href) found.push({ href: beside, score });
   }
   return dedupe(found);
 }
@@ -122,13 +125,14 @@ export function normalizeMark(bytes: Buffer, type: string): SiteMarkFile | null 
 }
 
 export async function loadSiteMark(host: string): Promise<SiteMarkFile | null> {
-  const key = host.toLowerCase();
-  if (!publicHost(key)) return null;
+  const name = host.toLowerCase();
+  if (!publicHost(name)) return null;
+  const key = `${CACHE_VERSION}:${name}`;
   const hit = cache.get(key);
   if (hit && Date.now() - hit.at < (hit.mark ? HIT_MS : MISS_MS)) return hit.mark;
   const pending = flights.get(key);
   if (pending) return pending;
-  const job = resolveSiteMark(key)
+  const job = resolveSiteMark(name)
     .then((mark) => {
       remember(key, mark);
       return mark;
@@ -150,7 +154,7 @@ async function resolveSiteMark(host: string): Promise<SiteMarkFile | null> {
   const pageUrl = page?.finalUrl || origin.toString();
   const choices = page ? iconChoices(page.bytes.toString("utf8"), pageUrl) : [];
   const declared = choices.reduce((max, item) => Math.max(max, item.score), 0);
-  if (page && declared < 1920) {
+  if (page && declared < 5120 && !choices.some((item) => /\.svg(\?|$)/i.test(item.href))) {
     const manifest = manifestHref(page.bytes.toString("utf8"), pageUrl);
     if (manifest) {
       const file = await fetchPublic(manifest, 100_000, "application/manifest+json,application/json,text/plain;q=0.5", true);
@@ -158,10 +162,12 @@ async function resolveSiteMark(host: string): Promise<SiteMarkFile | null> {
     }
   }
   choices.sort((left, right) => right.score - left.score);
-  const urls = [...new Set(choices.map((item) => item.href))].slice(0, 4);
-  urls.push(new URL("/apple-touch-icon.png", origin).toString());
+  const urls = choices.slice(0, 6).map((item) => item.href);
+  for (const path of ["/favicon.svg", "/icon.svg", "/apple-touch-icon.png", "/apple-touch-icon-precomposed.png", "/android-chrome-512x512.png", "/android-chrome-192x192.png"]) {
+    urls.push(new URL(path, origin).toString());
+  }
   let best = await sharpest([...new Set(urls)]);
-  if (!best || best.width < 96) {
+  if (!best || (!best.type.includes("svg") && best.width < 128)) {
     const google = `https://t0.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=${encodeURIComponent(origin.toString())}&size=256`;
     const extra = await sharpest([google]);
     if (extra && (!best || extra.width > best.width)) best = extra;
@@ -170,12 +176,14 @@ async function resolveSiteMark(host: string): Promise<SiteMarkFile | null> {
 }
 
 async function sharpest(urls: string[]): Promise<SiteMarkFile | null> {
-  const files = await Promise.all(urls.slice(0, 5).map((url) => fetchPublic(url, 350_000, "image/png,image/jpeg,image/webp,image/svg+xml,image/x-icon,*/*;q=0.4", false)));
+  const files = await Promise.all(urls.slice(0, 10).map((url) => fetchPublic(url, 700_000, "image/png,image/jpeg,image/webp,image/svg+xml,image/x-icon,*/*;q=0.4", false)));
   let best: SiteMarkFile | null = null;
   for (const file of files) {
     if (!file) continue;
     const mark = normalizeMark(file.bytes, file.type);
-    if (mark && (!best || mark.width > best.width)) best = mark;
+    if (!mark) continue;
+    const sharper = !best || mark.width > best.width || (mark.width === best.width && mark.type.includes("svg") && !best.type.includes("svg"));
+    if (sharper) best = mark;
   }
   return best;
 }
@@ -267,6 +275,14 @@ function httpPage(value: string | null): string | null {
   } catch {
     return null;
   }
+}
+
+function besideManifest(src: string, manifestUrl: string): string | null {
+  const cleaned = decodeEntities(src).trim();
+  if (!cleaned.startsWith("/") || cleaned.startsWith("//")) return null;
+  const file = cleaned.split("/").filter(Boolean).pop();
+  if (!file || file.includes("..")) return null;
+  return absoluteIcon(file, manifestUrl);
 }
 
 function absoluteIcon(href: string, pageUrl: string): string | null {

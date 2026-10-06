@@ -13,7 +13,8 @@ import { collapseTitle, extractArticle } from "@/lib/html";
 import { pruneOperationalLogs } from "@/lib/maintenance";
 import { prisma } from "@/lib/prisma";
 import { type RemixedContent, type ShelfFormat, remixText } from "@/lib/remixer";
-import { DAILY_CAP, DESKS, PER_DESK_PER_RUN, SOURCES_PER_PASS, ingestionSlot, planDeskPasses, spreadSources } from "@/lib/pipeline";
+import { listingScore, redditClip, redditClipRank, shelfFormat, SHORT_FORM_SECONDS, type RedditListing } from "@/lib/clips";
+import { DAILY_CAP, DESKS, PER_DESK_PER_DAY, PER_DESK_PER_RUN, REELS_PER_RUN, VIDEOS_PER_RUN, SOURCES_PER_PASS, ingestionSlot, planDeskPasses, spreadSources } from "@/lib/pipeline";
 import { newPublicId } from "@/lib/public-id";
 import { slugify } from "@/lib/slug";
 import { SOURCES, type Source } from "@/lib/sources";
@@ -57,20 +58,22 @@ type FeedItem = {
   playable?: string;
   nativeVideo?: boolean;
   publishedAt?: number;
+  views?: number;
+  points?: number;
 };
 
-type RedditPost = {
-  title?: string;
-  url?: string;
-  permalink?: string;
-  selftext?: string;
-  is_video?: boolean;
-  over_18?: boolean;
-  stickied?: boolean;
-  post_hint?: string;
-  domain?: string;
+type RedditPost = RedditListing & {
   is_self?: boolean;
+  created_utc?: number;
 };
+
+function leadSource(sources: Source[], name: string): Source[] {
+  const lead = sources.find((source) => source.sourceName === name);
+  const rest = sources.filter((source) => source !== lead);
+  const start = rest.length ? ingestionSlot() % rest.length : 0;
+  const rotated = [...rest.slice(start), ...rest.slice(0, start)];
+  return lead ? [lead, ...rotated] : rotated;
+}
 
 export async function runIngestionCycle(): Promise<void> {
   console.info("[forge] ingestion started");
@@ -100,7 +103,7 @@ export async function runIngestionCycle(): Promise<void> {
   );
   const passes = planDeskPasses(SOURCES, ingestionSlot(), categoryCounts);
 
-  async function collect(desk: string, sources: Source[], limit: number) {
+  async function collect(desk: string, sources: Source[], limit: number, maxReddit = 1, countDesk = true) {
     let made = 0;
     let redditOnDesk = 0;
     for (const source of sources) {
@@ -108,8 +111,10 @@ export async function runIngestionCycle(): Promise<void> {
       if (recentUrls.has(source.url) && savedNames.has(source.sourceName)) continue;
       const host = sourceHost(source.url);
       if (host && cooledHosts.has(host)) continue;
+      const bucket = source.categoryHint || desk;
+      if (countDesk && (categoryCounts.get(bucket) || 0) >= PER_DESK_PER_DAY) continue;
       const reddit = Boolean(host && (host === "reddit.com" || host.endsWith(".reddit.com")));
-      if (reddit && redditOnDesk >= 1) continue;
+      if (reddit && redditOnDesk >= maxReddit) continue;
       if (reddit) redditOnDesk += 1;
       try {
         const result = await ingestSource(source, 1);
@@ -117,7 +122,7 @@ export async function runIngestionCycle(): Promise<void> {
         created += result.created;
         if (result.created > 0) {
           savedNames.add(source.sourceName);
-          categoryCounts.set(desk, (categoryCounts.get(desk) || 0) + result.created);
+          if (countDesk) categoryCounts.set(bucket, (categoryCounts.get(bucket) || 0) + result.created);
         }
         recentUrls.add(source.url);
         await recordScrape(source.url, "SUCCESS", `published=${result.created} skipped=${result.skipped}`);
@@ -132,15 +137,22 @@ export async function runIngestionCycle(): Promise<void> {
     return made;
   }
 
+  const reelSources = SOURCES.filter((source) => source.format === "reel");
+  const reelsMade = await collect("Entertainment", spreadSources(leadSource(reelSources, "Reddit / popular clips"), 16), REELS_PER_RUN, 4, false);
+  console.info(`[forge] reels published=${reelsMade}`);
+
+  const clipSources = SOURCES.filter((source) => source.format === "video");
+  const clipsMade = await collect("Science", spreadSources(leadSource(clipSources, "Reddit / popular videos"), 12), VIDEOS_PER_RUN, 2, false);
+  console.info(`[forge] videos published=${clipsMade}`);
+
   for (let deskIndex = 0; deskIndex < DESKS.length; deskIndex += 1) {
     const desk = DESKS[deskIndex] || "";
-    const group = passes[deskIndex] || [];
+    const group = (passes[deskIndex] || []).filter((source) => source.format !== "reel" && source.format !== "video");
     if (created >= DAILY_CAP) break;
-    const deskSources = SOURCES.filter((source) => source.categoryHint === desk);
+    const deskSources = SOURCES.filter((source) => source.categoryHint === desk && source.format !== "reel" && source.format !== "video");
     const newcomers = deskSources.filter((source) => !savedNames.has(source.sourceName));
     const quiet = newcomers.filter((source) => !isRedditHost(source.url)).slice(0, 4);
-    const redditReel = newcomers.filter((source) => isRedditHost(source.url) && /\/r\/TikTok\//i.test(source.url)).slice(0, 1);
-    const newcomerPass = [...quiet, ...redditReel];
+    const newcomerPass = quiet;
     if (group.length === 0) {
       const made = await collect(desk, newcomerPass, newcomerPass.length);
       console.info(`[forge] desk ${desk} filled, new outlets published=${made}`);
@@ -328,44 +340,68 @@ async function ingestSource(
 }
 
 async function ingestReddit(source: Source, budget: number): Promise<{ created: number; skipped: number }> {
-  const page = await fetchPublicBody(source.url, "feed");
-  const payload = JSON.parse(page.body) as {
-    data?: { children?: { data?: RedditPost }[] };
-  };
+  let page: { body: string };
+  try {
+    page = await fetchPublicBody(source.url, "feed");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (!/429|403|too many requests|forbidden/i.test(message)) throw error;
+    return ingestXmlFeed(rssFallback(source), budget, source.format === "reel");
+  }
+  let payload: { data?: { children?: { data?: RedditPost }[] } };
+  try {
+    payload = JSON.parse(page.body) as { data?: { children?: { data?: RedditPost }[] } };
+  } catch {
+    return ingestXmlFeed(rssFallback(source), budget, source.format === "reel");
+  }
   const posts = (payload.data?.children || [])
     .map((child) => child.data)
     .filter((post): post is RedditPost => Boolean(post))
-    .filter((post) => !post.stickied && !post.over_18 && post.title && post.permalink)
+    .filter((post) => {
+      if (!post.created_utc) return true;
+      return Date.now() - post.created_utc * 1000 <= FRESH_MS;
+    })
+    .sort(
+      (a, b) =>
+        listingScore(b) - listingScore(a) ||
+        redditClipRank(b) - redditClipRank(a) ||
+        (b.created_utc || 0) - (a.created_utc || 0),
+    )
     .slice(0, MAX_ITEMS_PER_SOURCE);
 
   let created = 0;
   let skipped = 0;
   for (const post of posts) {
     if (created >= budget) break;
-    const permalink = `https://www.reddit.com${post.permalink}`;
-    const outbound = post.url || permalink;
-    const nativeVideo = Boolean(
-      post.is_video || post.post_hint === "hosted:video" || post.domain === "v.redd.it",
-    );
-    const outboundEmbed = toEmbedUrl(outbound);
-    const embedUrl = outboundEmbed || (nativeVideo ? redditVideoEmbed(permalink) : null);
-    const sourceUrl = outboundEmbed ? outbound : nativeVideo ? permalink : post.is_self ? permalink : outbound;
+    const clip = redditClip(post, source.format);
+    if (!clip) {
+      skipped += 1;
+      continue;
+    }
     const result = await publishExternalUrl({
-      url: sourceUrl,
+      url: clip.sourceUrl,
       sourceName: source.sourceName,
       categoryHint: source.categoryHint,
+      format: clip.format,
+      excerptOnly: true,
       isAutomated: true,
       preset: {
-        title: post.title,
-        text: post.selftext || "",
-        embedUrl,
-        sourceUrl,
+        title: clip.title,
+        text: clip.text,
+        embedUrl: clip.embedUrl,
+        sourceUrl: clip.sourceUrl,
+        thumbnailUrl: clip.thumbnailUrl,
       },
     });
     if (result.status === "created") created += 1;
     else skipped += 1;
   }
   return { created, skipped };
+}
+
+function rssFallback(source: Source): Source {
+  const rss = source.url.replace(/\/top\.json(?:\?.*)?$/i, "/top/.rss?t=day");
+  return { ...source, kind: "rss", url: rss };
 }
 
 async function ingestXmlFeed(
@@ -375,8 +411,12 @@ async function ingestXmlFeed(
 ): Promise<{ created: number; skipped: number }> {
   const page = await fetchPublicBody(source.url, "feed");
   const items = parseFeed(page.body)
+    .filter((item) => !item.publishedAt || Date.now() - item.publishedAt <= FRESH_MS)
     .sort((a, b) => {
-      const rank = source.format === "reel" ? clipRank(b) - clipRank(a) : 0;
+      const heat = feedHeat(b) - feedHeat(a);
+      if (heat) return heat;
+      if (isRedditHost(source.url)) return 0;
+      const rank = source.format === "reel" || source.format === "video" ? clipRank(b) - clipRank(a) : 0;
       return rank || (b.publishedAt || 0) - (a.publishedAt || 0);
     })
     .slice(0, shortsOnly ? 20 : MAX_ITEMS_PER_SOURCE);
@@ -401,12 +441,25 @@ async function ingestXmlFeed(
         ? `https://www.youtube.com/shorts/${item.videoId}`
         : `https://www.youtube.com/watch?v=${item.videoId}`
       : articleUrl || outsideClip || (isDiscussionLink(item.link) && item.playable) || item.link;
+    const longYouTube = /(?:youtube\.com\/watch|youtu\.be\/)/i.test(link) && !/\/shorts\//i.test(link);
+    if (source.format === "reel" && longYouTube && !(item.seconds && item.seconds > 0 && item.seconds <= SHORT_FORM_SECONDS)) {
+      skipped += 1;
+      continue;
+    }
     const embedUrl = toEmbedUrl(link) || (isDiscussionLink(link) && item.nativeVideo ? redditVideoEmbed(link) : null);
     if (source.kind === "youtube" && !embedUrl) {
       skipped += 1;
       continue;
     }
-    const shortClip = shortLink || Boolean(item.seconds && item.seconds > 0 && item.seconds <= 90);
+    const shortClip = shortLink || Boolean(item.seconds && item.seconds > 0 && item.seconds <= SHORT_FORM_SECONDS);
+    if (source.format === "reel" && item.seconds && item.seconds > SHORT_FORM_SECONDS) {
+      skipped += 1;
+      continue;
+    }
+    if (source.format === "video" && shortClip) {
+      skipped += 1;
+      continue;
+    }
     if (shortsOnly && !shortClip) {
       skipped += 1;
       continue;
@@ -455,16 +508,6 @@ async function resolveThumbnail(input: {
   } catch {
     return null;
   }
-}
-
-function shelfFormat(sourceFormat: ShelfFormat, link: string, shortClip: boolean, embedded: boolean): ShelfFormat {
-  if (/tiktok\.com|instagram\.com\/reel|\/shorts\//i.test(link)) return "reel";
-  if (sourceFormat === "video" && shortClip) return "reel";
-  if (sourceFormat === "reel" && embedded) return "reel";
-  if (embedded && (sourceFormat === "post" || sourceFormat === "article" || sourceFormat === "reel")) return "video";
-  if (!embedded && sourceFormat === "video" && /reddit\.com/i.test(link)) return "post";
-  if (sourceFormat === "reel") return "post";
-  return sourceFormat;
 }
 
 function isDiscussionLink(link: string): boolean {
@@ -536,6 +579,8 @@ function parseFeed(xml: string): FeedItem[] {
     const nativeVideo = /v\.redd\.it|redditmedia\.com/i.test(block);
     const shortForm = /\/shorts\//i.test(block);
     const publishedAt = feedTime(block);
+    const views = Number(block.match(/<media:statistics\b[^>]*\bviews=["'](\d+)["']/i)?.[1] || "0");
+    const points = Number(stripTags(summary).match(/Points:\s*(\d+)/i)?.[1] || "0");
     const thumbnail =
       imageFromMarkup(block) || (videoId ? youtubePoster(`https://www.youtube.com/watch?v=${videoId}`) : null);
     items.push({
@@ -549,6 +594,8 @@ function parseFeed(xml: string): FeedItem[] {
       playable: playable || undefined,
       nativeVideo,
       publishedAt: publishedAt || undefined,
+      views: Number.isFinite(views) ? views : 0,
+      points: Number.isFinite(points) ? points : 0,
     });
   }
   return items;
@@ -646,6 +693,10 @@ function sourceHost(value: string): string | null {
   } catch {
     return null;
   }
+}
+
+function feedHeat(item: FeedItem): number {
+  return item.views || item.points || 0;
 }
 
 function clipRank(item: FeedItem): number {

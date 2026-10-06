@@ -4,7 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } fr
 import { cardWeight, PostCard } from "@/components/PostCard";
 import { readShelfCache, writeShelfCache } from "@/components/shelf-cache";
 import { SkeletonCard } from "@/components/SkeletonCard";
-import { WatchFeed } from "@/components/WatchFeed";
+import { armPlayback, WatchFeed } from "@/components/WatchFeed";
 import { useWatch } from "@/components/WatchSession";
 import type { FeedCard, FeedFilter } from "@/lib/feed";
 
@@ -117,6 +117,7 @@ export function MediaShelf({
   }, [watch]);
 
   function openAt(index: number) {
+    armPlayback();
     if (watch) {
       watch.open({
         posts,

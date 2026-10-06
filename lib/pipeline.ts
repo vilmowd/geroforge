@@ -7,6 +7,8 @@ export const PER_DESK_PER_RUN = 4;
 export const PER_DESK_PER_DAY = PER_DESK_PER_RUN * RUNS_PER_DAY;
 export const DAILY_CAP = PER_DESK_PER_DAY * DESKS.length;
 export const SOURCES_PER_PASS = 8;
+export const REELS_PER_RUN = 6;
+export const VIDEOS_PER_RUN = 4;
 
 const SLOT_MS = 12 * 60 * 60 * 1000;
 

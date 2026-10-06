@@ -33,7 +33,7 @@ export function useSharpPicture(input: string | null | undefined) {
       image.onerror = () => {
         if (cancelled) return;
         if (index + 1 < list.length) probe(index + 1);
-        else if (index === 0) setShown("");
+        else setShown("");
       };
       image.src = url;
     }

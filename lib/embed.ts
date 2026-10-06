@@ -156,15 +156,13 @@ export function playbackEmbedSrc(input: string | null | undefined): string | nul
     const url = new URL(`https://www.youtube-nocookie.com/embed/${id}`);
     url.searchParams.set("autoplay", "1");
     // Phones refuse to start a clip that opens with sound, and then show their own play button.
-    // Start silent. Sound comes on only after the visitor taps the sound button.
+    // Start silent so the clip actually starts. The player turns sound on once it is playing.
     url.searchParams.set("mute", "1");
     url.searchParams.set("playsinline", "1");
     url.searchParams.set("rel", "0");
     url.searchParams.set("modestbranding", "1");
     url.searchParams.set("controls", "1");
     url.searchParams.set("fs", "0");
-    url.searchParams.set("loop", "1");
-    url.searchParams.set("playlist", id);
     url.searchParams.set("enablejsapi", "1");
     return allow(url.toString());
   }
@@ -180,6 +178,8 @@ export function playbackEmbedSrc(input: string | null | undefined): string | nul
     url.searchParams.set("muted", "1");
     url.searchParams.set("playsinline", "1");
   } else if (url.hostname === "www.tiktok.com") {
+    url.searchParams.set("autoplay", "1");
+  } else if (url.hostname === "www.redditmedia.com") {
     url.searchParams.set("autoplay", "1");
   }
   return isAllowedEmbedUrl(url.toString()) ? url.toString() : null;
