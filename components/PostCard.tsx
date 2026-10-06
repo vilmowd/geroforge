@@ -199,7 +199,7 @@ function ReadFace({ post, onOpen }: { post: FeedCard; onOpen?: () => void }) {
   return (
     <div className="flex flex-col gap-2 p-3.5 pb-2">
       <div className="flex items-center gap-2">
-        <SourceFavicon host={siteHost(post.sourceUrl, post.embedUrl)} />
+        <SourceFavicon host={siteHost(post.sourceUrl, post.embedUrl)} large />
         <p className="min-w-0 truncate text-xs font-semibold text-mist">{post.sourceName}</p>
       </div>
       <p className="text-sm font-extrabold leading-snug text-cream">{post.title}</p>
@@ -281,7 +281,7 @@ function DoorSide({
       <p className="text-sm font-extrabold leading-snug text-cream">{title}</p>
       {line ? <LeadExcerpt text={line} className="text-sm leading-5 text-mist" /> : null}
       <p className="flex items-center gap-1.5 text-xs font-medium text-mist">
-        <SourceFavicon host={host} />
+        <SourceFavicon host={host} large />
         <span className="min-w-0 truncate">{sourceName}</span>
       </p>
       <div className="mt-auto flex flex-wrap gap-2">

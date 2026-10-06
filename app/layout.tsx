@@ -40,7 +40,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
   return (
     <html lang="en" className={sans.variable} suppressHydrationWarning>
-      <body className="font-sans antialiased">
+      <body className="flex min-h-dvh flex-col font-sans antialiased">
         <script
           dangerouslySetInnerHTML={{
             __html:
@@ -49,8 +49,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         />
         <ScrollTop />
         <Nav user={user ? { name: user.name, email: user.email, karma: user.karma, avatarUrl: user.avatarUrl } : null} />
-        <div className="page-shell pb-[calc(5.4rem+env(safe-area-inset-bottom))] sm:pb-8">
-          <main className="mx-auto min-h-[70vh] max-w-6xl px-3 py-3 sm:px-6 sm:py-4">{children}</main>
+        <div className="page-shell flex flex-1 flex-col pb-[calc(5.4rem+env(safe-area-inset-bottom))] sm:pb-0">
+          <main className="mx-auto w-full max-w-6xl flex-1 px-3 py-3 sm:px-6 sm:py-4">{children}</main>
           <SiteFooter />
         </div>
         <Suspense fallback={null}>

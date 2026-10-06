@@ -12,14 +12,18 @@ body {
 }
 
 body {
-  min-height: 100vh;
-  background: #ffffff;
+  min-height: 100dvh;
+  background-color: #f4f2f8;
+  background-image:
+    radial-gradient(1100px 480px at -8% -12%, rgba(109, 77, 255, 0.16), transparent 62%),
+    radial-gradient(820px 420px at 108% -8%, rgba(240, 180, 41, 0.13), transparent 58%),
+    radial-gradient(720px 460px at 50% 115%, rgba(91, 77, 255, 0.07), transparent 62%);
+  background-attachment: fixed;
   color: #111111;
 }
 
 @media (max-width: 639px) {
   body {
-    background: #f2f2f6;
     -webkit-tap-highlight-color: transparent;
   }
 
