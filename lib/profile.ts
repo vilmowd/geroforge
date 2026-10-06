@@ -1,5 +1,14 @@
+import { linesForUser } from "@/lib/loops";
 import { prisma } from "@/lib/prisma";
 import { reveal } from "@/lib/seal";
+
+export type KeptLineView = {
+  id: string;
+  line: string;
+  sourceName: string;
+  sourceUrl: string | null;
+  slug: string;
+};
 
 export type PublicProfile = {
   name: string;
@@ -8,6 +17,7 @@ export type PublicProfile = {
   posts: number;
   likes: number;
   comments: number;
+  lines: KeptLineView[];
 };
 
 export async function publicProfile(token: string): Promise<PublicProfile | null> {
@@ -17,11 +27,12 @@ export async function publicProfile(token: string): Promise<PublicProfile | null
     select: { id: true, name: true, avatarUrl: true, bio: true },
   });
   if (!user) return null;
-  const [posts, likes, commentLikes, comments] = await Promise.all([
+  const [posts, likes, commentLikes, comments, lines] = await Promise.all([
     prisma.post.count({ where: { authorId: user.id } }),
     prisma.vote.count({ where: { userId: user.id } }),
     prisma.commentLike.count({ where: { userId: user.id } }),
     prisma.comment.count({ where: { userId: user.id } }),
+    linesForUser(user.id),
   ]);
   return {
     name: displayName(user.name),
@@ -30,6 +41,7 @@ export async function publicProfile(token: string): Promise<PublicProfile | null
     posts,
     likes: likes + commentLikes,
     comments,
+    lines,
   };
 }
 

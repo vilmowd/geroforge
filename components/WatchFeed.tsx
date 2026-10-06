@@ -9,7 +9,12 @@ import { CommentThread } from "@/components/CommentThread";
 import { VoteButton } from "@/components/VoteButton";
 import type { CommentNode } from "@/lib/comments";
 import { useSharpPicture } from "@/components/useSharpPicture";
+import { DigestActions } from "@/components/DigestActions";
+import { LeadExcerpt } from "@/components/LeadExcerpt";
+import { markExit } from "@/components/mark-exit";
+import { SourceFavicon } from "@/components/SourceFavicon";
 import { canonicalVideoPage, playbackEmbedSrc, youtubeVideoId } from "@/lib/embed";
+import { visibleLead } from "@/lib/html";
 import { siteHost } from "@/lib/site-mark";
 import { pictureSources } from "@/lib/thumbnails";
 import type { FeedCard, FeedFilter } from "@/lib/feed";
@@ -338,7 +343,8 @@ function WatchSlide({
   const video = Boolean(post.embedUrl && (post.format === "video" || post.format === "reel" || post.contentType === "VIDEO_EMBED"));
   const source = safeHttp(post.sourceUrl) || (post.embedUrl ? canonicalVideoPage(post.embedUrl) : null);
   const playerShowsTitle = video;
-  const note = readingNote(post);
+  const lead = video ? "" : visibleLead(post.opening ?? []);
+  const sourceHost = siteHost(post.sourceUrl, post.embedUrl);
   const [likes, setLikes] = useState(post.upvotesCount);
 
   return (
@@ -382,19 +388,31 @@ function WatchSlide({
       <div className={`pointer-events-none absolute inset-x-0 bottom-0 z-10 flex items-end gap-3 bg-gradient-to-t px-4 pb-[calc(4.6rem+env(safe-area-inset-bottom))] pt-16 ${soft ? "from-[#242428] via-[#242428]/80" : "from-black via-black/80"} to-transparent`}>
         <div className="pointer-events-auto min-w-0 flex-1">
           <h2 className={playerShowsTitle ? "sr-only" : "text-lg font-extrabold leading-tight"}>{post.title}</h2>
-          {note ? <p className="mt-2 line-clamp-4 text-[15px] leading-6 text-white/92">{note}</p> : null}
+          {lead ? <LeadExcerpt text={lead} className="mt-2 text-[15px] leading-6 text-white/92" /> : null}
           {source ? (
             <p className="mt-1.5">
-              <a href={source} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-9 items-center text-sm font-semibold text-white underline">
-                {note ? "Continue reading" : "Original"}
+              <a
+                href={source}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => markExit(post.id, post.sourceName)}
+                className="inline-flex min-h-9 items-center text-sm font-semibold text-white underline"
+              >
+                {lead ? "Continue reading" : "Original"}
               </a>
             </p>
           ) : null}
-          <p className="mt-1 truncate text-xs text-white/75">
-            {post.sourceName}
-            <span aria-hidden="true"> · </span>
-            {timeAgo(post.createdAt)}
+          <p className="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-white/75">
+            {lead ? <SourceFavicon host={sourceHost} /> : null}
+            <span className="truncate">
+              {post.sourceName}
+              <span aria-hidden="true"> · </span>
+              {timeAgo(post.createdAt)}
+            </span>
           </p>
+          <div className="mt-2 max-w-md text-white [&_.text-cream]:text-white [&_.text-mist]:text-white/75 [&_.text-copper]:text-white [&_.bg-white]:bg-white/10">
+            <DigestActions post={post} authenticated={authenticated} />
+          </div>
           <p className="mt-1 text-xs text-white/75">
             {likes} {likes === 1 ? "like" : "likes"}
             <span aria-hidden="true"> · </span>
@@ -833,13 +851,6 @@ function useVideosMuted() {
     muteListeners.forEach((listener) => listener(value));
   }, []);
   return [muted, update] as const;
-}
-
-function readingNote(post: FeedCard): string | null {
-  if (post.format === "video" || post.format === "reel") return null;
-  const note = post.tldr?.trim() || "";
-  if (note.length < 40 || note === post.title) return null;
-  return note;
 }
 
 function frameHost(frame: HTMLIFrameElement): string {

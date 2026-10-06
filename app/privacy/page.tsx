@@ -29,7 +29,10 @@ export default function PrivacyPage() {
         After you log in, an HTTP-only cookie named forge_session holds a random token. The database stores only a hash of that token. The cookie lasts 30 days unless you sign out sooner. Signing out deletes that session.
       </p>
       <p>
-        Text size, contrast, and the other accessibility choices stay in this browser’s local storage. They are not sent to the server. Your cookie choice, accept all or accept necessary, is also stored only in this browser.
+        Text size, contrast, and the other accessibility choices stay in this browser’s local storage. They are not sent to the server. Your cookie choice, accept all or accept necessary, is also stored only in this browser. The choice to read the shelf as sentences, instead of pictures, stays in this browser too.
+      </p>
+      <p>
+        If you are signed in, a few more choices are stored with the account. An answer about whether leaving for a source was worth it. A line you keep. A line you offer or pick for a post. A clipping you pass to another person, which is shown once on their next visit and then dropped. These are not used for advertising.
       </p>
       <p>
         The application does not run an advertising or analytics product, and it does not sell personal information. The computer that hosts the site may keep ordinary connection logs, such as an IP address, the time, and the page requested, as part of running a web server. Rate limits used to slow abusive traffic are kept in memory on the server and are not a profile of you. Feed-fetch logs record the public source address and whether the fetch worked. They are deleted after about 14 days. They are not a history of the pages you opened.

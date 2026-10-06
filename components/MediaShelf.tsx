@@ -41,6 +41,7 @@ export function MediaShelf({
   caughtUp?: boolean;
 }) {
   const [posts, setPosts] = useState(initialPosts);
+  const freshKey = initialPosts.map((post) => `${post.id}:${post.offers?.length ?? 0}:${post.roomLine ?? ""}:${post.passedBy ?? ""}:${post.door?.id ?? ""}`).join("|");
   const [cursor, setCursor] = useState<string | null>(initialCursor);
   const [shelfMix, setShelfMix] = useState(mix);
   const [loading, setLoading] = useState(false);
@@ -57,6 +58,7 @@ export function MediaShelf({
   const columnRef = useRef(1);
   const cardRef = useRef(new Map<string, HTMLDivElement>());
   const [packEpoch, setPackEpoch] = useState(0);
+  const [readMode, setReadMode] = useState(false);
 
   const restoredRef = useRef(false);
   useEffect(() => {
@@ -77,6 +79,27 @@ export function MediaShelf({
   useEffect(() => {
     cursorRef.current = cursor;
   }, [cursor]);
+
+  useEffect(() => {
+    setPosts(initialPosts);
+    setCursor(initialCursor);
+    cursorRef.current = initialCursor;
+  }, [freshKey, initialCursor, initialPosts]);
+
+  useEffect(() => {
+    const stored = window.localStorage.getItem("forge_read_shelf") === "1";
+    setReadMode(stored);
+    function onRead(event: Event) {
+      const next = Boolean((event as CustomEvent<boolean>).detail);
+      measuredRef.current.clear();
+      laneRef.current.clear();
+      lockedRef.current.clear();
+      setReadMode(next);
+      setPackEpoch((epoch) => epoch + 1);
+    }
+    window.addEventListener("forge-read", onRead);
+    return () => window.removeEventListener("forge-read", onRead);
+  }, []);
 
   async function loadMore() {
     const next = cursorRef.current;
@@ -141,10 +164,10 @@ export function MediaShelf({
     laneRef.current.clear();
     lockedRef.current.clear();
   }
-  const lanes = placePosts(posts, columns, laneRef.current, lockedRef.current, measuredRef.current);
+  const lanes = placePosts(posts, columns, laneRef.current, lockedRef.current, measuredRef.current, readMode);
   const skeletonCounts = Array.from({ length: columns }, () => 0);
   if (loading) {
-    const heights = lanes.map((lane) => lane.reduce((sum, post) => sum + (measuredRef.current.get(post.id) ?? estimatedHeight(post)), 0));
+    const heights = lanes.map((lane) => lane.reduce((sum, post) => sum + (measuredRef.current.get(post.id) ?? estimatedHeight(post, readMode)), 0));
     for (let extra = 0; extra < columns; extra += 1) {
       const lane = shortestLane(heights);
       skeletonCounts[lane] += 1;
@@ -191,7 +214,13 @@ export function MediaShelf({
                     else cardRef.current.delete(post.id);
                   }}
                 >
-                  <PostCard post={post} index={indexOf.get(post.id) ?? 0} onOpen={() => openAt(indexOf.get(post.id) ?? 0)} />
+                  <PostCard
+                    post={post}
+                    index={indexOf.get(post.id) ?? 0}
+                    readMode={readMode}
+                    authenticated={authenticated}
+                    onOpen={() => openAt(indexOf.get(post.id) ?? 0)}
+                  />
                 </div>
               ))}
               {Array.from({ length: skeletonCounts[laneIndex] ?? 0 }, (_, index) => (
@@ -225,8 +254,8 @@ export function MediaShelf({
   );
 }
 
-function estimatedHeight(post: FeedCard) {
-  return cardWeight(post);
+function estimatedHeight(post: FeedCard, readMode = false) {
+  return cardWeight(post, readMode);
 }
 
 function shortestLane(heights: number[]) {
@@ -243,6 +272,7 @@ function placePosts(
   lanes: Map<string, number>,
   locked: Set<string>,
   measured: Map<string, number>,
+  readMode = false,
 ): FeedCard[][] {
   const present = new Set(posts.map((post) => post.id));
   for (const id of [...lanes.keys()]) {
@@ -262,14 +292,14 @@ function placePosts(
       continue;
     }
     placed[lane].push(post);
-    heights[lane] += measured.get(post.id) ?? estimatedHeight(post);
+    heights[lane] += measured.get(post.id) ?? estimatedHeight(post, readMode);
   }
   for (const post of fresh) {
     const lane = shortestLane(heights);
     lanes.set(post.id, lane);
     if (measured.has(post.id)) locked.add(post.id);
     placed[lane].push(post);
-    heights[lane] += measured.get(post.id) ?? estimatedHeight(post);
+    heights[lane] += measured.get(post.id) ?? estimatedHeight(post, readMode);
   }
   return placed;
 }

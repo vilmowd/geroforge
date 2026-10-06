@@ -5,6 +5,8 @@ import { interleave, mixSeed, shuffle, spreadSources } from "@/lib/mix";
 import { postWhere } from "@/lib/post-ref";
 import { prisma } from "@/lib/prisma";
 import { openCursor, reveal, sealCursor } from "@/lib/seal";
+import { pairDoors, preferSources, type DoorPeek, type LineOfferView } from "@/lib/digest";
+import { attachDigest, peekPass, sourceWeights } from "@/lib/loops";
 import { inferFormat, readRemix, type RemixedContent, type ShelfFormat } from "@/lib/remixer";
 import { SOURCES } from "@/lib/sources";
 
@@ -37,10 +39,17 @@ export type FeedCard = {
   isAutomated: boolean;
   createdAt: string;
   tldr: string | null;
+  opening: string[];
   statValues: string[];
   authorName: string | null;
   voted: boolean;
   format: ShelfFormat;
+  deskLine: string | null;
+  roomLine: string | null;
+  kept: boolean;
+  passedBy: string | null;
+  door: DoorPeek | null;
+  offers: LineOfferView[];
 };
 
 export type PostDetail = {
@@ -150,7 +159,7 @@ export async function getFeedPage(
     const have = new Set(pool.map((post) => post.id));
     pool = pool.concat(older.filter((post) => !have.has(post.id)));
   }
-  const ordered = arrangeShelf(pool, filter, mix);
+  const ordered = preferSources(arrangeShelf(pool, filter, mix), await sourceWeights(userId));
   const start = decodeOffset(cursor, mix);
   const page: FeedRow[] = [];
   let index = start;
@@ -164,11 +173,26 @@ export async function getFeedPage(
     userId,
     page.map((post) => post.id),
   );
+  const pass = userId ? await peekPass(userId) : null;
+  let cards = page.map((post) => toCard(post, voted.has(post.id)));
+  if (pass) {
+    const already = cards.find((card) => card.id === pass.publicId);
+    if (already) {
+      cards = [{ ...already, passedBy: pass.fromName }, ...cards.filter((card) => card.id !== pass.publicId)];
+    } else {
+      const row = await prisma.post.findFirst({ where: { publicId: pass.publicId }, select: cardSelect });
+      if (row) {
+        const passVote = await votedIds(userId, [row.id]);
+        cards = [{ ...toCard(row, passVote.has(row.id)), passedBy: pass.fromName }, ...cards];
+      }
+    }
+  }
+  cards = pairDoors(await attachDigest(cards, userId));
   return {
-    posts: page.map((post) => toCard(post, voted.has(post.id))),
+    posts: cards,
     nextCursor: index < ordered.length ? sealCursor(mix, index) : null,
     mix,
-    caughtUp: page.length === 0 && pool.length > 0,
+    caughtUp: page.length === 0 && pool.length > 0 && !pass,
   };
 }
 
@@ -293,9 +317,16 @@ function toCard(
     isAutomated: post.isAutomated,
     createdAt: post.createdAt.toISOString(),
     tldr: remix ? viewerExcerpt(remix) : null,
+    opening: remix?.opening ?? [],
     statValues: remix?.stats.map((stat) => stat.value).slice(0, 1) ?? [],
     authorName: post.author?.name ? reveal(post.author.name) || null : null,
     voted,
+    deskLine: remix ? viewerExcerpt(remix) : null,
+    roomLine: null,
+    kept: false,
+    passedBy: null,
+    door: null,
+    offers: [],
     format: inferFormat({
       contentType: post.contentType,
       sourceName: post.sourceName,
@@ -333,7 +364,8 @@ export async function getWatchQueue(slug: string, userId?: string, seenIds: stri
 }
 
 async function loadFeedWindow(key: string, where: Prisma.PostWhereInput): Promise<FeedRow[]> {
-  const hit = windows.get(key);
+  const cacheKey = `${key}:open`;
+  const hit = windows.get(cacheKey);
   if (hit && Date.now() - hit.at < WINDOW_TTL_MS) return hit.rows;
   const pending = flights.get(key);
   if (pending) return pending;
@@ -346,7 +378,7 @@ async function loadFeedWindow(key: string, where: Prisma.PostWhereInput): Promis
     })
     .then((rows) => {
       const slim = rows.map(slimRow);
-      windows.set(key, { at: Date.now(), rows: slim });
+      windows.set(cacheKey, { at: Date.now(), rows: slim });
       flights.delete(key);
       return slim;
     })
@@ -408,6 +440,7 @@ function slimRow(row: FeedRow): FeedRow {
       markdown: "",
       keywords: [],
       format: remix.format,
+      opening: remix.opening ?? [],
     },
   };
 }

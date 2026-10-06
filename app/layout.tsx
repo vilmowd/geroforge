@@ -3,6 +3,7 @@ import { Plus_Jakarta_Sans } from "next/font/google";
 import { Suspense } from "react";
 import { BottomNav } from "@/components/BottomNav";
 import { CookieNotice } from "@/components/CookieNotice";
+import { ExitPrompt } from "@/components/ExitPrompt";
 import { Nav } from "@/components/Nav";
 import { ScrollTop } from "@/components/ScrollTop";
 import { SiteFooter } from "@/components/SiteFooter";
@@ -56,6 +57,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <BottomNav />
         </Suspense>
         <CookieNotice />
+        <ExitPrompt />
       </body>
     </html>
   );

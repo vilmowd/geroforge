@@ -1,4 +1,6 @@
 import { listingScore, redditClip, shelfFormat } from "../lib/clips";
+import { cleanLine, pairDoors, preferSources, type DoorPeek } from "../lib/digest";
+import { leadParagraphs, visibleLead } from "../lib/html";
 import { remixText } from "../lib/remixer";
 import { isAllowedEmbedUrl, playbackEmbedSrc, redditVideoEmbed, toEmbedUrl } from "../lib/embed";
 import { SOURCES } from "../lib/sources";
@@ -213,4 +215,42 @@ icoPng.copy(ico, 22);
 assert(normalizeMark(ico, "image/x-icon")?.type === "image/png", "ico png");
 assert(normalizeMark(ico, "image/x-icon")?.width === 180, "ico size");
 
+const france = pairDoors([
+  doorCard("a", "Protests spread across France as unions join student demonstrations", "World", "New York Times"),
+  doorCard("b", "Protests sweep France closing schools after student walkouts", "World", "Washington Post"),
+  doorCard("c", "NASA SpaceX crew farewell from the station", "Science", "YouTube / NASA"),
+]);
+assert(france.length === 2, `doors ${france.length}`);
+assert(france[0]?.door?.id === "b", france[0]?.door?.id || "france stories did not pair");
+assert(france[1]?.id === "c", "unrelated card stays");
+assert(cleanLine("too short") === null, "short line");
+assert(cleanLine("Read the original at https://example.com today please") === null, "line with a link");
+assert(cleanLine("Protests closed schools across France this morning.")?.includes("France") === true, "clean line");
+const weighted = preferSources([{ sourceName: "A" }, { sourceName: "B" }, { sourceName: "C" }], new Map([["C", 2]]));
+assert(weighted[0]?.sourceName === "C", weighted.map((row) => row.sourceName).join(","));
+const lead = leadParagraphs(
+  `<article><p>Oil companies asked the Supreme Court to stop climate lawsuits before a jury hears them.</p><p>${"Cities say the cases should stay in state court because the harm is local. ".repeat(3)}</p><p>Cookie policy and subscribe to our newsletter for more updates today.</p><p>${"A later hearing would decide whether federal law blocks the claims. ".repeat(3)}</p><p>Shelved under Technology. This Technology note is written for the shelf.</p></article>`,
+  "Big Oil asks Supreme Court to kill climate lawsuits",
+);
+assert(lead.length === 3, `lead count ${lead.length}`);
+assert(lead[0]?.includes("Supreme Court") === true, lead[0] || "missing lead");
+assert(lead.every((paragraph) => !/cookie|written for the shelf/i.test(paragraph)), "lead skipped boilerplate");
+const shown = visibleLead(lead);
+assert(shown.length > 40 && shown.length <= 700, `visible lead ${shown.length}`);
+assert(!/written for the shelf|Shelved under/i.test(shown), "visible lead stays source text");
+
 console.log("remixer and embed checks passed");
+
+function doorCard(id: string, title: string, category: string, sourceName: string) {
+  return {
+    id,
+    title,
+    category,
+    sourceName,
+    createdAt: "2026-10-06T12:00:00.000Z",
+    tldr: title,
+    sourceUrl: "https://example.com/story",
+    slug: id,
+    door: null as DoorPeek | null,
+  };
+}

@@ -27,6 +27,7 @@ model User {
   avatarUrl    String?
   bio          String?
   karma      Int        @default(0)
+  nameHash   String?    @unique
   createdAt  DateTime   @default(now())
   posts      Post[]
   comments   Comment[]
@@ -34,6 +35,13 @@ model User {
   commentLikes CommentLike[]
   seenPosts    SeenPost[]
   sessions     Session[]
+  exitVotes    ExitVote[]
+  keptLines    KeptLine[]
+  passesSent   ClipPass[]  @relation("PassFrom")
+  passesGot    ClipPass[]  @relation("PassTo")
+  lineOffers   LineOffer[]
+  linePicks    LinePick[]
+  doorPicks    DoorPick[]
 }
 
 model Session {
@@ -82,6 +90,12 @@ model Post {
   votes          Vote[]
   comments       Comment[]
   seenBy         SeenPost[]
+  exitVotes      ExitVote[]
+  keptLines      KeptLine[]
+  passes         ClipPass[]
+  lineOffers     LineOffer[]
+  doorPicks      DoorPick[]  @relation("DoorChosen")
+  doorOthers     DoorPick[]  @relation("DoorOther")
 
   @@index([createdAt])
   @@index([category, createdAt])
@@ -141,6 +155,90 @@ model Vote {
   createdAt DateTime @default(now())
 
   @@unique([userId, postId])
+}
+
+model ExitVote {
+  id        String   @id @default(cuid())
+  userId    String
+  postId    String
+  worth     Boolean
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, postId])
+  @@index([userId, createdAt])
+}
+
+model KeptLine {
+  id         String   @id @default(cuid())
+  userId     String
+  postId     String
+  line       String
+  sourceName String
+  sourceUrl  String?
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post       Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@unique([userId, postId])
+  @@index([userId, createdAt])
+}
+
+model ClipPass {
+  id         String    @id @default(cuid())
+  fromUserId String
+  toUserId   String
+  postId     String
+  seenAt     DateTime?
+  createdAt  DateTime  @default(now())
+  fromUser   User      @relation("PassFrom", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUser     User      @relation("PassTo", fields: [toUserId], references: [id], onDelete: Cascade)
+  post       Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@index([toUserId, seenAt])
+}
+
+model LineOffer {
+  id        String     @id @default(cuid())
+  postId    String
+  userId    String
+  line      String
+  picks     Int        @default(0)
+  flags     Int        @default(0)
+  pulled    Boolean    @default(false)
+  createdAt DateTime   @default(now())
+  post      Post       @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  picksBy   LinePick[]
+
+  @@index([postId, pulled, picks])
+  @@index([userId])
+}
+
+model LinePick {
+  id        String    @id @default(cuid())
+  offerId   String
+  userId    String
+  offer     LineOffer @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+
+  @@unique([offerId, userId])
+}
+
+model DoorPick {
+  id        String   @id @default(cuid())
+  userId    String
+  postId    String
+  otherId   String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post      Post     @relation("DoorChosen", fields: [postId], references: [id], onDelete: Cascade)
+  other     Post     @relation("DoorOther", fields: [otherId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, postId, otherId])
+  @@index([userId, createdAt])
 }
 
 model ScrapeLog {

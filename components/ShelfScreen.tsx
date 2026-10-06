@@ -1,6 +1,7 @@
 import { CategoryTabs } from "@/components/CategoryTabs";
 import { JsonLd } from "@/components/JsonLd";
 import { MediaShelf } from "@/components/MediaShelf";
+import { ReadShelf } from "@/components/ReadShelf";
 import { RefreshFeed } from "@/components/RefreshFeed";
 import { SkeletonCard } from "@/components/SkeletonCard";
 import { WatchSession } from "@/components/WatchSession";
@@ -31,6 +32,7 @@ export function ShelfScreen({
       </div>
       <div className="sticky top-[calc(3.5rem+env(safe-area-inset-top))] z-20 -mx-3 flex items-center justify-end gap-2 px-3 py-1 sm:static sm:mx-0 sm:justify-start sm:px-0 sm:py-0">
         <CategoryTabs active={category ? null : filter} />
+        {filter === "videos" || filter === "reels" ? null : <ReadShelf />}
         <RefreshFeed />
       </div>
       <div className="mt-3 sm:mt-4">

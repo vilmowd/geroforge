@@ -29,6 +29,38 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
         <Stat icon={Heart} label="Likes" value={profile.likes} />
         <Stat icon={MessageCircle} label="Comments" value={profile.comments} />
       </dl>
+      <LineBook lines={profile.lines} />
+    </section>
+  );
+}
+
+function LineBook({ lines }: { lines: { id: string; line: string; sourceName: string; sourceUrl: string | null; slug: string }[] }) {
+  if (lines.length === 0) return null;
+  return (
+    <section className="mt-3 rounded-[28px] bg-white px-5 py-5 shadow-card">
+      <h2 className="text-sm font-extrabold tracking-tight text-cream">Book of lines</h2>
+      <ul className="mt-3 flex flex-col gap-3">
+        {lines.map((item) => (
+          <li key={item.id} className="border-t border-line pt-3 first:border-t-0 first:pt-0">
+            <p className="text-sm leading-6 text-cream">{item.line}</p>
+            <p className="mt-1 text-xs text-mist">
+              {item.sourceName}
+              {item.sourceUrl ? (
+                <>
+                  <span aria-hidden="true"> · </span>
+                  <a href={item.sourceUrl} target="_blank" rel="noopener noreferrer" className="font-semibold text-copper underline">
+                    Original
+                  </a>
+                </>
+              ) : null}
+              <span aria-hidden="true"> · </span>
+              <a href={`/posts/${item.slug}`} className="font-semibold text-copper underline">
+                On the shelf
+              </a>
+            </p>
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }

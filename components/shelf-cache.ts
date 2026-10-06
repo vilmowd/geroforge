@@ -2,7 +2,7 @@
 
 import type { FeedCard } from "@/lib/feed";
 
-const PREFIX = "gero-shelf:v1:";
+const PREFIX = "gero-shelf:v3:";
 const MAX_POSTS = 120;
 
 export type ShelfCache = {

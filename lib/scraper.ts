@@ -9,7 +9,7 @@ import {
   toEmbedUrl,
 } from "@/lib/embed";
 import { IngestError, toIngestError } from "@/lib/errors";
-import { collapseTitle, extractArticle } from "@/lib/html";
+import { collapseTitle, extractArticle, leadParagraphs } from "@/lib/html";
 import { pruneOperationalLogs } from "@/lib/maintenance";
 import { prisma } from "@/lib/prisma";
 import { type RemixedContent, type ShelfFormat, remixText } from "@/lib/remixer";
@@ -253,6 +253,17 @@ async function publishInner(input: PublishInput): Promise<PublishResult> {
     return { status: "skipped", reason: "That page didn't include enough readable text." };
   }
 
+  let opening = leadParagraphs(text, title);
+  if (!embedUrl) {
+    try {
+      const page = await fetchPublicBody(canonical.toString(), "article");
+      const fromPage = leadParagraphs(page.body, title);
+      if (fromPage.length > opening.length) opening = fromPage;
+    } catch {
+      // A blocked page still publishes. The open view uses a lead only when one was read.
+    }
+  }
+
   const thumbnailUrl = await resolveThumbnail({
     embedUrl,
     pageUrl: canonical.toString(),
@@ -275,7 +286,7 @@ async function publishInner(input: PublishInput): Promise<PublishResult> {
     thumbnailUrl,
     category: mixed.category,
     rawContent: null,
-    remix: mixed.remix,
+    remix: { ...mixed.remix, opening },
     isAutomated: input.isAutomated,
     authorId: input.authorId ?? null,
   });
@@ -668,6 +679,7 @@ function remixToJson(remix: RemixedContent): Prisma.InputJsonValue {
     keywords: [...remix.keywords],
     stats: remix.stats.map((stat) => ({ value: stat.value, label: stat.label })),
     ...(remix.format ? { format: remix.format } : {}),
+    ...(remix.opening && remix.opening.length > 0 ? { opening: remix.opening } : {}),
   };
 }
 

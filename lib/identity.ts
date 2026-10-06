@@ -35,6 +35,7 @@ export async function persistSeal(user: User): Promise<User> {
       email: user.email.startsWith("v1.") ? user.email : seal(email),
       emailHash: user.emailHash || emailKey(email),
       name: !name ? name : user.name?.startsWith("v1.") ? user.name : seal(name),
+      nameHash: name ? emailKey(name.trim().toLowerCase()) : user.nameHash,
       avatarUrl: avatar,
       bio: !user.bio || user.bio.startsWith("v1.") ? user.bio : seal(user.bio),
     },
@@ -56,7 +57,7 @@ export function unpackMagicEmail(stored: string): string | null {
 }
 
 function needsSeal(user: User): boolean {
-  return !user.email.startsWith("v1.") || !user.emailHash || Boolean(user.name && !user.name.startsWith("v1.")) || Boolean(user.avatarUrl?.startsWith("data:image/")) || Boolean(user.bio && !user.bio.startsWith("v1."));
+  return !user.email.startsWith("v1.") || !user.emailHash || Boolean(user.name && !user.name.startsWith("v1.")) || Boolean(user.name && !user.nameHash) || Boolean(user.avatarUrl?.startsWith("data:image/")) || Boolean(user.bio && !user.bio.startsWith("v1."));
 }
 
 function revealBio(value: string | null): string | null {

@@ -13,6 +13,7 @@ export type RemixedContent = {
   markdown: string;
   keywords: string[];
   format?: ShelfFormat;
+  opening?: string[];
 };
 
 const FORMATS = new Set<ShelfFormat>(["video", "reel", "news", "world", "article", "post"]);
@@ -186,12 +187,21 @@ export function readRemix(value: unknown): RemixedContent | null {
     ? (record.format as ShelfFormat)
     : undefined;
 
+  const opening = Array.isArray(record.opening)
+    ? record.opening
+        .filter((paragraph): paragraph is string => typeof paragraph === "string")
+        .map((paragraph) => paragraph.replace(/\s+/g, " ").trim())
+        .filter((paragraph) => paragraph.length >= 40)
+        .slice(0, 5)
+    : [];
+
   return {
     tldr: record.tldr.slice(0, 700),
     markdown: record.markdown.slice(0, 4000),
     stats: stats.slice(0, 3),
     keywords,
     format,
+    opening,
   };
 }
 
