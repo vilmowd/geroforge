@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Camera, ChevronRight, Heart, LogOut, MessageCircle, Settings, Sparkles } from "lucide-react";
@@ -178,25 +178,48 @@ function AboutYou({ initial }: { initial: string }) {
     setError("");
   }
 
+  useEffect(() => {
+    function onShow(event: PageTransitionEvent) {
+      if (event.persisted) setPending(false);
+    }
+    window.addEventListener("pageshow", onShow);
+    return () => window.removeEventListener("pageshow", onShow);
+  }, []);
+
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setPending(true);
     setError("");
     setNote("");
+    let settled = false;
+    const timer = window.setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      setPending(false);
+      setError("That save did not finish. Try again.");
+    }, 15000);
     try {
       const data = new FormData();
       data.set("bio", bio);
       const result = await updateBioAction(data);
-      if (result.error) {
-        setError(result.error);
+      if (settled) return;
+      settled = true;
+      if (!result || result.error) {
+        setError(result?.error || "That could not be saved. Try again.");
         return;
       }
-      setSaved(bio.trim());
-      setBio(bio.trim());
+      const next = bio.trim();
+      setSaved(next);
+      setBio(next);
       setNote("Saved. Other people see this on your profile.");
       router.refresh();
+    } catch {
+      if (settled) return;
+      settled = true;
+      setError("That could not be saved. Try again.");
     } finally {
-      setPending(false);
+      window.clearTimeout(timer);
+      window.setTimeout(() => setPending(false), 0);
     }
   }
 

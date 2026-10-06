@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { destroySession, getCurrentUser, openSession, requestMagicLink, SESSION_COOKIE, sessionCookieOptions } from "@/lib/auth";
@@ -133,13 +134,20 @@ export async function updateAvatarAction(formData: FormData): Promise<{ error: s
 const BIO_LIMIT = 280;
 
 export async function updateBioAction(formData: FormData): Promise<{ error: string }> {
-  const user = await getCurrentUser();
-  if (!user) return { error: "Sign in to update your profile." };
-  if (!rateLimit(`bio:${user.id}`, 20, 15 * 60 * 1000)) return { error: "Too many updates. Try again in a few minutes." };
-  const bio = cleanBio(String(formData.get("bio") || ""));
-  if (bio.error) return { error: bio.error };
-  await prisma.user.update({ where: { id: user.id }, data: { bio: bio.text ? seal(bio.text) : null } });
-  return { error: "" };
+  try {
+    const user = await getCurrentUser();
+    if (!user) return { error: "Sign in to update your profile." };
+    if (!rateLimit(`bio:${user.id}`, 20, 15 * 60 * 1000)) return { error: "Too many updates. Try again in a few minutes." };
+    const bio = cleanBio(String(formData.get("bio") || ""));
+    if (bio.error) return { error: bio.error };
+    await prisma.user.update({ where: { id: user.id }, data: { bio: bio.text ? seal(bio.text) : null } });
+    revalidatePath("/account");
+    revalidatePath(`/u/${user.publicId}`);
+    return { error: "" };
+  } catch (error) {
+    console.error("[forge] bio update failed", error);
+    return { error: "That could not be saved. Try again." };
+  }
 }
 
 function cleanBio(raw: string): { text: string | null; error: string } {
