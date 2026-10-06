@@ -48,7 +48,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         />
         <ScrollTop />
         <Nav user={user ? { name: user.name, email: user.email, karma: user.karma, avatarUrl: user.avatarUrl } : null} />
-        <CookieNotice />
         <div className="page-shell pb-[calc(5.4rem+env(safe-area-inset-bottom))] sm:pb-8">
           <main className="mx-auto min-h-[70vh] max-w-6xl px-3 py-3 sm:px-6 sm:py-4">{children}</main>
           <SiteFooter />
@@ -56,6 +55,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <Suspense fallback={null}>
           <BottomNav />
         </Suspense>
+        <CookieNotice />
       </body>
     </html>
   );

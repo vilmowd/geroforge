@@ -12,7 +12,7 @@ export default function PrivacyPage() {
     <article className="mx-auto max-w-2xl space-y-4 text-sm leading-6 text-cream">
       <h1 className="text-3xl font-extrabold tracking-tight">Privacy policy</h1>
       <p className="text-mist">
-        Last updated 5 October 2026. This policy describes the information this GeroForge site handles. It is written for this product. It is not a substitute for advice from a lawyer in your country.
+        Last updated 6 October 2026. This policy describes the information this GeroForge site handles. It is written for this product. It is not a substitute for advice from a lawyer in your country.
       </p>
 
       <h2 className="pt-2 text-lg font-extrabold">Information you give us</h2>
@@ -29,7 +29,7 @@ export default function PrivacyPage() {
         After you log in, an HTTP-only cookie named forge_session holds a random token. The database stores only a hash of that token. The cookie lasts 30 days unless you sign out sooner. Signing out deletes that session.
       </p>
       <p>
-        Text size, contrast, and the other accessibility choices stay in this browser’s local storage. They are not sent to the server. A note that you dismissed the cookie notice is also stored only in this browser.
+        Text size, contrast, and the other accessibility choices stay in this browser’s local storage. They are not sent to the server. Your cookie choice, accept all or accept necessary, is also stored only in this browser.
       </p>
       <p>
         The application does not run an advertising or analytics product, and it does not sell personal information. The computer that hosts the site may keep ordinary connection logs, such as an IP address, the time, and the page requested, as part of running a web server. Rate limits used to slow abusive traffic are kept in memory on the server and are not a profile of you. Feed-fetch logs record the public source address and whether the fetch worked. They are deleted after about 14 days. They are not a history of the pages you opened.
