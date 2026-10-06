@@ -4,7 +4,9 @@ WORKDIR /app
 
 FROM base AS deps
 COPY package.json package-lock.json ./
-RUN npm ci
+COPY prisma ./prisma
+# Generate only needs the variable present. It does not connect.
+RUN DATABASE_URL="postgresql://forge:forge@127.0.0.1:5432/forge?schema=public" npm ci
 
 FROM base AS builder
 COPY --from=deps /app/node_modules ./node_modules
@@ -20,7 +22,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY prisma ./prisma
-RUN npm ci --omit=dev && npm cache clean --force
+RUN DATABASE_URL="postgresql://forge:forge@127.0.0.1:5432/forge?schema=public" npm ci --omit=dev && npm cache clean --force
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/next.config.mjs ./next.config.mjs
