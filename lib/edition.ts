@@ -25,6 +25,7 @@ export type HouseEdition = {
   clip: EditionStory | null;
   five: EditionStory[];
   wire: EditionStory[];
+  earlier: EditionStory[];
   bundle: EditionStory[];
   bundleTitle: string | null;
 };
@@ -95,6 +96,15 @@ export function buildEdition(stories: EditionStory[], follows: FollowSet, now = 
   }
   const bundle = findBundle(newest.filter(isText));
   const desks = new Set(bundle.map((story) => story.category)).size;
+  const wire = newest.slice(0, 8);
+  const shown = new Set<string>([
+    ...(lead ? [lead.id] : []),
+    ...beside.map((story) => story.id),
+    ...(clip ? [clip.id] : []),
+    ...five.map((story) => story.id),
+    ...wire.map((story) => story.id),
+    ...bundle.map((story) => story.id),
+  ]);
   return {
     name: clock.name,
     show: clock.show,
@@ -104,19 +114,17 @@ export function buildEdition(stories: EditionStory[], follows: FollowSet, now = 
     beside,
     clip,
     five: five.slice(0, 5),
-    wire: newest.slice(0, 8),
+    wire,
+    earlier: newest.filter((story) => !shown.has(story.id)).slice(0, 24),
     bundle,
     bundleTitle: bundle.length < 2 ? null : desks >= 2 ? "One story, several desks" : "Two sources, one story",
   };
 }
 
 export async function loadEdition(follows: FollowSet, now = new Date()): Promise<HouseEdition> {
-  const clock = editionClock(now);
-  const since = new Date(clock.start.getTime() - SLOT_MS);
   const rows = await prisma.post.findMany({
-    where: { createdAt: { gte: since } },
     orderBy: { createdAt: "desc" },
-    take: 80,
+    take: 240,
     select: {
       publicId: true,
       title: true,

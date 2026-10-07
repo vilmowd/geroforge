@@ -4,7 +4,7 @@ import { youtubePoster } from "@/lib/embed";
 import { interleave, mixSeed, shuffle, spreadSources } from "@/lib/mix";
 import { postWhere } from "@/lib/post-ref";
 import { prisma } from "@/lib/prisma";
-import { openCursor, reveal, sealCursor } from "@/lib/seal";
+import { openSecret, reveal, seal } from "@/lib/seal";
 import { pairDoors, preferSources, type DoorPeek, type LineOfferView } from "@/lib/digest";
 import { leadWithFollows, readFollows } from "@/lib/follows";
 import { attachDigest, peekPass, sourceWeights } from "@/lib/loops";
@@ -99,8 +99,6 @@ const RAILS: { id: FeedFilter; label: string }[] = [
 ];
 
 export const FEED_PAGE_SIZE = 30;
-const WINDOW_SIZE = 180;
-const WINDOW_TTL_MS = 60_000;
 
 const cardSelect = {
   id: true,
@@ -122,9 +120,6 @@ const cardSelect = {
 } satisfies Prisma.PostSelect;
 
 type FeedRow = Prisma.PostGetPayload<{ select: typeof cardSelect }>;
-
-const windows = new Map<string, { at: number; rows: FeedRow[] }>();
-const flights = new Map<string, Promise<FeedRow[]>>();
 
 export function parseFilter(value: string | undefined): FeedFilter {
   return FILTERS.includes(value as FeedFilter) ? (value as FeedFilter) : "all";
@@ -148,34 +143,38 @@ export async function getFeedPage(
   options?: { mix?: string; seenIds?: string[]; category?: string },
 ): Promise<{ posts: FeedCard[]; nextCursor: string | null; mix: string; caughtUp: boolean }> {
   const mix = validMix(options?.mix) || mixSeed();
-  const seen = new Set((options?.seenIds || []).filter((id) => /^[a-z0-9]{8,40}$/i.test(id)).slice(0, 200));
   const category = validCategory(options?.category);
-  const where = category ? { category } : whereForFilter(filter);
-  const allowedNames = new Set(SOURCES.map((source) => source.sourceName));
-  const keep = (rows: FeedRow[]) => rows.filter((post) => !post.isAutomated || allowedNames.has(post.sourceName));
-  let pool = keep(await loadFeedWindow(category ? `category:${category}` : filter, where));
-  const unseenCount = () => pool.filter((post) => !seen.has(post.id)).length;
-  if (unseenCount() < 24) {
-    const older = keep(await loadOlder(where, pool.map((post) => post.id)));
-    const have = new Set(pool.map((post) => post.id));
-    pool = pool.concat(older.filter((post) => !have.has(post.id)));
-  }
-  const ordered = leadWithFollows(preferSources(arrangeShelf(pool, filter, mix), await sourceWeights(userId)), await readFollows(userId));
-  const start = decodeOffset(cursor, mix);
-  const page: FeedRow[] = [];
-  let index = start;
-  while (index < ordered.length && page.length < take) {
-    const post = ordered[index];
-    index += 1;
-    if (!post || seen.has(post.publicId) || seen.has(post.id)) continue;
-    page.push(post);
-  }
+  const where = archiveWhere(category, filter);
+  const marker = openArchiveCursor(cursor);
+  const rows = await prisma.post.findMany({
+    where: marker
+      ? {
+          AND: [
+            where,
+            {
+              OR: [
+                { createdAt: { lt: marker.createdAt } },
+                { AND: [{ createdAt: marker.createdAt }, { id: { lt: marker.id } }] },
+              ],
+            },
+          ],
+        }
+      : where,
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    take: take + 1,
+    select: cardSelect,
+  });
+  const hasMore = rows.length > take;
+  const page = rows.slice(0, take);
+  const oldest = page[page.length - 1];
+  const nextCursor = hasMore && oldest ? sealArchiveCursor(oldest.createdAt, oldest.id) : null;
+  const ordered = leadWithFollows(preferSources(arrangeShelf(page, filter, mix), await sourceWeights(userId)), await readFollows(userId));
   const voted = await votedIds(
     userId,
-    page.map((post) => post.id),
+    ordered.map((post) => post.id),
   );
   const pass = userId ? await peekPass(userId) : null;
-  let cards = page.map((post) => toCard(post, voted.has(post.id)));
+  let cards = ordered.map((post) => toCard(post, voted.has(post.id)));
   if (pass) {
     const already = cards.find((card) => card.id === pass.publicId);
     if (already) {
@@ -191,9 +190,9 @@ export async function getFeedPage(
   cards = pairDoors(await attachDigest(cards, userId));
   return {
     posts: cards,
-    nextCursor: index < ordered.length ? sealCursor(mix, index) : null,
+    nextCursor,
     mix,
-    caughtUp: page.length === 0 && pool.length > 0 && !pass,
+    caughtUp: false,
   };
 }
 
@@ -364,34 +363,6 @@ export async function getWatchQueue(slug: string, userId?: string, seenIds: stri
   };
 }
 
-async function loadFeedWindow(key: string, where: Prisma.PostWhereInput): Promise<FeedRow[]> {
-  const cacheKey = `${key}:open`;
-  const hit = windows.get(cacheKey);
-  if (hit && Date.now() - hit.at < WINDOW_TTL_MS) return hit.rows;
-  const pending = flights.get(key);
-  if (pending) return pending;
-  const job = prisma.post
-    .findMany({
-      where,
-      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-      take: WINDOW_SIZE,
-      select: cardSelect,
-    })
-    .then((rows) => {
-      const slim = rows.map(slimRow);
-      windows.set(cacheKey, { at: Date.now(), rows: slim });
-      flights.delete(key);
-      return slim;
-    })
-    .catch((error: unknown) => {
-      flights.delete(key);
-      if (hit) return hit.rows;
-      throw error;
-    });
-  flights.set(key, job);
-  return job;
-}
-
 function validCategory(value: string | undefined): string | null {
   if (!value || !/^[A-Za-z][A-Za-z ]{1,40}$/.test(value)) return null;
   return value;
@@ -413,16 +384,29 @@ function rowFormat(post: FeedRow): string {
   });
 }
 
-async function loadOlder(where: Prisma.PostWhereInput, excludeIds: string[]): Promise<FeedRow[]> {
-  const rows = await prisma.post.findMany({
-    where: {
-      AND: [where, excludeIds.length > 0 ? { id: { notIn: excludeIds.slice(0, 500) } } : {}],
-    },
-    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-    take: WINDOW_SIZE,
-    select: cardSelect,
-  });
-  return rows.map(slimRow);
+function archiveWhere(category: string | null, filter: FeedFilter): Prisma.PostWhereInput {
+  const base = category ? { category } : whereForFilter(filter);
+  const names = [...new Set(SOURCES.map((source) => source.sourceName))];
+  return {
+    AND: [base, { OR: [{ isAutomated: false }, { sourceName: { in: names } }] }],
+  };
+}
+
+function sealArchiveCursor(createdAt: Date, id: string): string {
+  return seal(`archive:${createdAt.getTime()}:${id}`);
+}
+
+function openArchiveCursor(token: string | null | undefined): { createdAt: Date; id: string } | null {
+  if (!token) return null;
+  const plain = openSecret(token);
+  if (!plain?.startsWith("archive:")) return null;
+  const rest = plain.slice("archive:".length);
+  const cut = rest.indexOf(":");
+  if (cut < 1) return null;
+  const ms = Number(rest.slice(0, cut));
+  const id = rest.slice(cut + 1);
+  if (!Number.isFinite(ms) || ms < 0 || !/^[a-z0-9]{8,40}$/i.test(id)) return null;
+  return { createdAt: new Date(ms), id };
 }
 
 function viewerExcerpt(remix: RemixedContent): string {
@@ -430,31 +414,8 @@ function viewerExcerpt(remix: RemixedContent): string {
   return (body || remix.tldr).slice(0, 520);
 }
 
-function slimRow(row: FeedRow): FeedRow {
-  const remix = readRemix(row.remixedContent);
-  if (!remix) return { ...row, remixedContent: null };
-  return {
-    ...row,
-    remixedContent: {
-      tldr: viewerExcerpt(remix),
-      stats: remix.stats.slice(0, 1),
-      markdown: "",
-      keywords: [],
-      format: remix.format,
-      opening: remix.opening ?? [],
-    },
-  };
-}
-
 function validMix(value: string | undefined): string | null {
   return value && /^[a-z0-9]{6,16}$/i.test(value) ? value : null;
-}
-
-function decodeOffset(cursor: string | null | undefined, mix: string): number {
-  if (!cursor) return 0;
-  const opened = openCursor(cursor);
-  if (!opened || opened.mix !== mix) return 0;
-  return opened.offset;
 }
 
 function formatEquals(format: ShelfFormat): Prisma.PostWhereInput {

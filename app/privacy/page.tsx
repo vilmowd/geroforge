@@ -23,7 +23,7 @@ export default function PrivacyPage() {
 
       <h2 className="pt-2 text-lg font-extrabold">Information collected as you use the site</h2>
       <p>
-        Each post has its own unguessable address. Opening a post stores that address token in a cookie named gero_seen, so the shelf can skip it later. If you are signed in, the same visit is stored on the account. The cookie lasts up to 180 days. It is not used for advertising. The feed’s “load more” marker is sealed, so it does not spell out a page number.
+        Each post has its own unguessable address. Opening a post stores that address token in a cookie named gero_seen. If you are signed in, the same visit is stored on the account. The cookie lasts up to 180 days. It is not used for advertising, and it does not remove the post from the shelf. The feed’s “load more” marker is sealed, so it does not spell out a page number.
       </p>
       <p>
         After you log in, an HTTP-only cookie named forge_session holds a random token. The database stores only a hash of that token. The cookie lasts 30 days unless you sign out sooner. Signing out deletes that session.

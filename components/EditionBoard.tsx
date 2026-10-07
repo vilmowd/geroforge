@@ -110,6 +110,20 @@ export async function EditionBoard() {
         </div>
       ) : null}
 
+      {edition.earlier.length > 0 ? (
+        <div className="mt-6">
+          <h2 className="text-lg font-extrabold text-cream">Still on the shelf</h2>
+          <p className="mt-1 text-sm text-mist">Yesterday stays here. New posts are added on top.</p>
+          <ul className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {edition.earlier.map((story) => (
+              <li key={story.id}>
+                <StoryCard story={story} picture />
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
       {edition.wire.length > 0 ? (
         <div className="mt-6">
           <h2 className="text-lg font-extrabold text-cream">The wire</h2>

@@ -51,7 +51,6 @@ export function MediaShelf({
   const noteSeenRef = useRef<(id: string) => void>(() => undefined);
   const cursorRef = useRef(initialCursor);
   const loadingRef = useRef(false);
-  const watchedRef = useRef(new Set<string>());
   const measuredRef = useRef(new Map<string, number>());
   const laneRef = useRef(new Map<string, number>());
   const lockedRef = useRef(new Set<string>());
@@ -115,8 +114,7 @@ export function MediaShelf({
       const data = (await response.json()) as { posts: FeedCard[]; nextCursor: string | null };
       setPosts((current) => {
         const seen = new Set(current.map((post) => post.id));
-        const watched = watchedRef.current;
-        return [...current, ...data.posts.filter((post) => !seen.has(post.id) && !watched.has(post.id))];
+        return [...current, ...data.posts.filter((post) => !seen.has(post.id))];
       });
       cursorRef.current = data.nextCursor;
       setCursor(data.nextCursor);
@@ -128,10 +126,8 @@ export function MediaShelf({
     }
   }
 
-  function noteSeen(id: string) {
-    if (watchedRef.current.has(id)) return;
-    watchedRef.current.add(id);
-    setPosts((current) => current.filter((post) => post.id !== id));
+  function noteSeen(_id: string) {
+    // Opening a story leaves it on the shelf. Older posts stay as new ones arrive.
   }
   noteSeenRef.current = noteSeen;
 
