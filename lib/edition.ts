@@ -61,7 +61,6 @@ export function editionClock(now = new Date()) {
   const slot = ingestionSlot(now.getTime());
   const start = new Date(slot * SLOT_MS);
   const end = new Date((slot + 1) * SLOT_MS);
-  const evening = start.getUTCHours() >= 12;
   const dateLabel = new Intl.DateTimeFormat("en-GB", {
     day: "numeric",
     month: "long",
@@ -77,8 +76,8 @@ export function editionClock(now = new Date()) {
   return {
     start,
     end,
-    name: evening ? "Evening edition" : "Morning edition",
-    show: evening ? "Evening five" : "Morning five",
+    name: "Today's edition",
+    show: "The five",
     dateLabel,
     closesLabel,
   };

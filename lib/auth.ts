@@ -8,6 +8,17 @@ import { newPublicId } from "@/lib/public-id";
 import { emailKey, seal } from "@/lib/seal";
 import { uniqueUsername } from "@/lib/username";
 
+function isNextControlFlow(error: unknown) {
+  if (typeof error !== "object" || error === null || !("digest" in error)) return false;
+  const digest = String((error as { digest?: unknown }).digest || "");
+  return (
+    digest === "DYNAMIC_SERVER_USAGE" ||
+    digest.startsWith("NEXT_REDIRECT") ||
+    digest.startsWith("NEXT_NOT_FOUND") ||
+    digest.startsWith("NEXT_HTTP_ERROR_FALLBACK")
+  );
+}
+
 export const SESSION_COOKIE = "forge_session";
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30;
 const MAGIC_TTL_MS = 20 * 60 * 1000;
@@ -39,6 +50,7 @@ export const getCurrentUser = cache(async function getCurrentUser() {
     const stored = await persistSeal(session.user);
     return presentUser(stored);
   } catch (error) {
+    if (isNextControlFlow(error)) throw error;
     console.error("[forge] session lookup failed", error);
     return null;
   }

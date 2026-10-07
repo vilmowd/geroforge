@@ -12,6 +12,8 @@ import "./globals.css";
 
 const sans = Plus_Jakarta_Sans({ subsets: ["latin"], variable: "--font-sans" });
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl()),
   title: { default: "GeroForge", template: "%s · GeroForge" },

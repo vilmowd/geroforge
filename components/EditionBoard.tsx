@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Briefcase, Clapperboard, CloudSun, Code2, Cpu, FlaskConical, Globe2, HeartPulse, MessageCircle, Orbit, Palette, Sparkles, Trophy, type LucideIcon } from "lucide-react";
+import { EditionHeading } from "@/components/EditionHeading";
 import { FollowButton } from "@/components/FollowButton";
 import { SourceFavicon } from "@/components/SourceFavicon";
 import { getCurrentUser } from "@/lib/auth";
@@ -70,7 +71,7 @@ export async function EditionBoard() {
         <div className="grid lg:grid-cols-[1.1fr_0.9fr]">
           <div className="bg-gradient-to-br from-[#6d4dff] via-[#8a6cff] to-[#f0b429] px-5 py-6 text-white sm:px-7 sm:py-8">
             <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-white/80">Daily digest</p>
-            <h1 className="mt-2 text-4xl font-extrabold tracking-tight sm:text-5xl">{edition.name}</h1>
+            <EditionHeading />
             <p className="mt-3 max-w-md text-sm leading-6 text-white/90">Your daily content in one place.</p>
             <div className="mt-5 flex items-center">
               {faces.slice(0, 4).map((story, index) => (
