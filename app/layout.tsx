@@ -3,6 +3,7 @@ import { Plus_Jakarta_Sans } from "next/font/google";
 import { Suspense } from "react";
 import { BottomNav } from "@/components/BottomNav";
 import { CookieNotice } from "@/components/CookieNotice";
+import { GoogleAnalytics } from "@/components/GoogleAnalytics";
 import { ExitPrompt } from "@/components/ExitPrompt";
 import { AccountNav, Nav } from "@/components/Nav";
 import { ScrollTop } from "@/components/ScrollTop";
@@ -20,6 +21,7 @@ export const metadata: Metadata = {
   description: "A swipeable shelf of public videos, reels, news, and short original notes. Each item links back to its source.",
   applicationName: "GeroForge",
   robots: { index: true, follow: true, googleBot: { index: true, follow: true, "max-image-preview": "large" } },
+  verification: { google: "h4XkRkJPeOV1-POqkQiyya60idIFgf1i1ycPKemi93g" },
   openGraph: {
     type: "website",
     siteName: "GeroForge",
@@ -55,6 +57,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Suspense fallback={null}>
           <BottomNav />
         </Suspense>
+        <GoogleAnalytics />
         <CookieNotice />
         <ExitPrompt />
       </body>

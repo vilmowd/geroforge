@@ -2,26 +2,19 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-
-const KEY = "forge_cookie_notice";
-
-function alreadyChosen(value: string | null) {
-  return value === "accepted" || value === "all" || value === "necessary";
-}
+import { readCookieChoice, writeCookieChoice, type CookieChoice } from "@/lib/cookie-choice";
 
 export function CookieNotice() {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    const visible = !alreadyChosen(window.localStorage.getItem(KEY));
+    const visible = readCookieChoice() === null;
     setOpen(visible);
     document.documentElement.dataset.cookie = visible ? "open" : "closed";
   }, []);
 
-  function choose(choice: "all" | "necessary") {
-    window.localStorage.setItem(KEY, choice);
-    document.documentElement.dataset.cookie = "closed";
-    document.documentElement.dataset.cookies = choice;
+  function choose(choice: CookieChoice) {
+    writeCookieChoice(choice);
     setOpen(false);
   }
 
@@ -40,7 +33,7 @@ export function CookieNotice() {
             Cookies
           </p>
           <p id="cookie-notice-body" className="mt-1 text-sm leading-5 text-mist">
-            Necessary cookies keep you signed in and remember posts you have opened. This site does not use advertising or analytics cookies. Videos play from other sites, which may set cookies under their own policies.{" "}
+            Necessary cookies keep you signed in and remember posts you have opened. Accept all also allows Google Analytics, which measures how the site is used. Accept necessary does not. Videos play from other sites, which may set cookies under their own policies.{" "}
             <Link href="/privacy" className="font-semibold text-copper underline underline-offset-2">
               Privacy
             </Link>

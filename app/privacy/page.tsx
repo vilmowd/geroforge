@@ -12,7 +12,7 @@ export default function PrivacyPage() {
     <article className="mx-auto max-w-2xl space-y-4 text-sm leading-6 text-cream">
       <h1 className="text-3xl font-extrabold tracking-tight">Privacy policy</h1>
       <p className="text-mist">
-        Last updated 6 October 2026. This policy describes the information this GeroForge site handles. It is written for this product. It is not a substitute for advice from a lawyer in your country.
+        Last updated 7 October 2026. This policy describes the information this GeroForge site handles. It is written for this product. It is not a substitute for advice from a lawyer in your country.
       </p>
 
       <h2 className="pt-2 text-lg font-extrabold">Information you give us</h2>
@@ -29,13 +29,17 @@ export default function PrivacyPage() {
         After you log in, an HTTP-only cookie named forge_session holds a random token. The database stores only a hash of that token. The cookie lasts 30 days unless you sign out sooner. Signing out deletes that session.
       </p>
       <p>
-        Text size, contrast, and the other accessibility choices stay in this browser’s local storage. They are not sent to the server. Your cookie choice, accept all or accept necessary, is also stored only in this browser. The choice to read the shelf as sentences, instead of pictures, stays in this browser too.
+        Text size, contrast, and the other accessibility choices stay in this browser’s local storage. They are not sent to the server. Your cookie choice, accept all or accept necessary, is also stored only in this browser. Accept all allows Google Analytics. Accept necessary does not. The choice to read the shelf as sentences, instead of pictures, stays in this browser too.
       </p>
       <p>
         If you are signed in, a few more choices are stored with the account. An answer about whether leaving for a source was worth it. A line you keep. A line you offer or pick for a post. A clipping you pass to another person, which is shown once on their next visit and then dropped. A desk or a source you follow, which leads your shelf. These are not used for advertising.
       </p>
       <p>
-        The application does not run an advertising or analytics product, and it does not sell personal information. The computer that hosts the site may keep ordinary connection logs, such as an IP address, the time, and the page requested, as part of running a web server. Rate limits used to slow abusive traffic are kept in memory on the server and are not a profile of you. Feed-fetch logs record the public source address and whether the fetch worked. They are deleted after about 14 days. They are not a history of the pages you opened.
+        GeroForge does not sell personal information, and it does not run an advertising product. If you choose Accept all, the site loads Google Analytics (measurement ID G-2FCWLXGDEP) from Google. That tag records how the site is used, such as the pages opened and general browser information. Google may set its own cookies, including cookies named _ga, which can last up to two years. If you choose Accept necessary, the tag is not loaded. Google describes its own handling in its{" "}
+        <a href="https://policies.google.com/privacy" className="font-semibold text-copper" target="_blank" rel="noopener noreferrer">
+          privacy policy
+        </a>
+        . The computer that hosts the site may keep ordinary connection logs, such as an IP address, the time, and the page requested, as part of running a web server. Rate limits used to slow abusive traffic are kept in memory on the server and are not a profile of you. Feed-fetch logs record the public source address and whether the fetch worked. They are deleted after about 14 days. They are not a history of the pages you opened.
       </p>
 
       <h2 className="pt-2 text-lg font-extrabold">Public items on the shelf</h2>
@@ -45,10 +49,10 @@ export default function PrivacyPage() {
 
       <h2 className="pt-2 text-lg font-extrabold">Who else processes information</h2>
       <p>
-        The hosting provider processes the data needed to run the site. If email sign-in is turned on, the email provider receives the address and the message so the sign-in link can be delivered. Embed and thumbnail hosts receive the request your browser makes to them. GeroForge does not control those hosts.
+        The hosting provider processes the data needed to run the site. If email sign-in is turned on, the email provider receives the address and the message so the sign-in link can be delivered. Embed and thumbnail hosts receive the request your browser makes to them. If you choose Accept all, Google receives the analytics request described above. GeroForge does not control those hosts.
       </p>
       <p>
-        For visitors in the European Economic Area, the United Kingdom, or a similar region, the operator relies on the account contract for account data, and on the legitimate interest of running a safe shelf and remembering which posts you opened, for the other items above. You can also complain to a data-protection regulator where you live.
+        For visitors in the European Economic Area, the United Kingdom, or a similar region, the operator relies on the account contract for account data, and on the legitimate interest of running a safe shelf and remembering which posts you opened, for the other items above. Google Analytics runs only after you choose Accept all. You can also complain to a data-protection regulator where you live.
       </p>
 
       <h2 className="pt-2 text-lg font-extrabold">How long information is kept</h2>
