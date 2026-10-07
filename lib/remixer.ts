@@ -178,8 +178,12 @@ export function inferFormat(input: {
   category?: string;
   stored?: string | null;
 }): ShelfFormat {
-  if (input.stored && FORMATS.has(input.stored as ShelfFormat)) return input.stored as ShelfFormat;
   const blob = `${input.sourceName} ${input.sourceUrl || ""} ${input.embedUrl || ""}`.toLowerCase();
+  const shortHost = /youtube shorts|\/shorts\/|tiktok|instagram/.test(blob);
+  if (shortHost && input.contentType === "VIDEO_EMBED") return "reel";
+  const longWatch = /youtube\.com\/watch|youtu\.be\//.test(blob);
+  if (longWatch && input.contentType === "VIDEO_EMBED") return "video";
+  if (input.stored && FORMATS.has(input.stored as ShelfFormat)) return input.stored as ShelfFormat;
   if (input.contentType === "VIDEO_EMBED") {
     if (/shorts|tiktok|instagram|\/reel/.test(blob)) return "reel";
     return "video";

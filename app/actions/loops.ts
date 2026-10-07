@@ -1,13 +1,63 @@
 "use server";
 
 import { getCurrentUser } from "@/lib/auth";
-import { cleanLine } from "@/lib/digest";
-import { claimPass, findUserByName } from "@/lib/loops";
+import { cleanLine, type ClipMarkKind, type ClipMarks } from "@/lib/digest";
+import { claimPass, clipMarksFor, findUserByName } from "@/lib/loops";
 import { findPostRef } from "@/lib/post-ref";
 import { prisma } from "@/lib/prisma";
 import { rateLimit } from "@/lib/rate-limit";
+import { inferFormat } from "@/lib/remixer";
 
 export type LoopState = { error: string; ok?: boolean };
+
+const CLIP_MARKS = new Set<ClipMarkKind>(["INTERESTING", "UNINTERESTING", "INFORMATIVE"]);
+
+export async function markClip(postId: string, kind: string): Promise<LoopState & { marks?: ClipMarks }> {
+  const user = await getCurrentUser();
+  if (!user) return { error: "Sign in to react to a clip." };
+  if (!CLIP_MARKS.has(kind as ClipMarkKind)) return { error: "That reaction is not available." };
+  const mark = kind as ClipMarkKind;
+  if (!rateLimit(`mark:${user.id}`, 60, 10 * 60 * 1000)) return { error: "Too many reactions. Try again shortly." };
+  const post = await findPostRef(postId);
+  if (!post) return { error: "That clip is no longer on the shelf." };
+  const row = await prisma.post.findFirst({
+    where: { id: post.id },
+    select: {
+      contentType: true,
+      sourceName: true,
+      sourceUrl: true,
+      embedUrl: true,
+      category: true,
+      remixedContent: true,
+    },
+  });
+  if (!row) return { error: "That clip is no longer on the shelf." };
+  const stored =
+    row.remixedContent && typeof row.remixedContent === "object" && "format" in row.remixedContent
+      ? String((row.remixedContent as { format?: unknown }).format ?? "")
+      : null;
+  const format = inferFormat({
+    contentType: row.contentType,
+    sourceName: row.sourceName,
+    sourceUrl: row.sourceUrl,
+    embedUrl: row.embedUrl,
+    category: row.category,
+    stored,
+  });
+  if (format !== "video" && format !== "reel") return { error: "Reactions are for clips." };
+  const existing = await prisma.clipMark.findUnique({
+    where: { userId_postId: { userId: user.id, postId: post.id } },
+    select: { id: true, kind: true },
+  });
+  if (existing?.kind === mark) {
+    await prisma.clipMark.delete({ where: { id: existing.id } });
+  } else if (existing) {
+    await prisma.clipMark.update({ where: { id: existing.id }, data: { kind: mark } });
+  } else {
+    await prisma.clipMark.create({ data: { userId: user.id, postId: post.id, kind: mark } });
+  }
+  return { error: "", ok: true, marks: await clipMarksFor(post.id, user.id) };
+}
 
 export async function settlePass(): Promise<void> {
   const user = await getCurrentUser();

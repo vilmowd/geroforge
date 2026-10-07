@@ -12,6 +12,12 @@ enum ContentType {
   VIDEO_EMBED
 }
 
+enum ClipMarkKind {
+  INTERESTING
+  UNINTERESTING
+  INFORMATIVE
+}
+
 enum ScrapeStatus {
   SUCCESS
   ERROR
@@ -45,6 +51,7 @@ model User {
   deskFollows  DeskFollow[]
   sourceFollows SourceFollow[]
   corrections  Correction[]
+  clipMarks    ClipMark[]
 }
 
 model Session {
@@ -100,6 +107,7 @@ model Post {
   doorPicks      DoorPick[]  @relation("DoorChosen")
   doorOthers     DoorPick[]  @relation("DoorOther")
   corrections    Correction[]
+  clipMarks      ClipMark[]
 
   @@index([createdAt])
   @@index([commentCount])
@@ -280,6 +288,19 @@ model Correction {
 
   @@unique([userId, postId])
   @@index([pulled, createdAt])
+}
+
+model ClipMark {
+  id        String       @id @default(cuid())
+  userId    String
+  postId    String
+  kind      ClipMarkKind
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post      Post         @relation(fields: [postId], references: [id], onDelete: Cascade)
+  createdAt DateTime     @default(now())
+
+  @@unique([userId, postId])
+  @@index([postId, kind])
 }
 
 model ScrapeLog {

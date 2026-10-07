@@ -1,4 +1,4 @@
-import { LINE_LEAD, type LineOfferView } from "@/lib/digest";
+import { LINE_LEAD, type ClipMarkKind, type ClipMarks, type LineOfferView } from "@/lib/digest";
 import { prisma } from "@/lib/prisma";
 import { emailKey, reveal } from "@/lib/seal";
 
@@ -49,7 +49,7 @@ export async function attachDigest<T extends DigestInput>(cards: T[], userId?: s
       );
   const postIds = [...internal.values()];
   if (postIds.length === 0) return cards;
-  const [offers, kept] = await Promise.all([
+  const [offers, kept, grouped, mineRows] = await Promise.all([
     prisma.lineOffer.findMany({
       where: { postId: { in: postIds }, pulled: false },
       orderBy: [{ picks: "desc" }, { createdAt: "asc" }],
@@ -68,8 +68,20 @@ export async function attachDigest<T extends DigestInput>(cards: T[], userId?: s
           select: { postId: true },
         })
       : Promise.resolve([]),
+    prisma.clipMark.groupBy({
+      by: ["postId", "kind"],
+      where: { postId: { in: postIds } },
+      _count: { _all: true },
+    }),
+    userId
+      ? prisma.clipMark.findMany({
+          where: { userId, postId: { in: postIds } },
+          select: { postId: true, kind: true },
+        })
+      : Promise.resolve([]),
   ]);
   const keptIds = new Set(kept.map((row) => row.postId));
+  const marksByPost = clipMarkMap(grouped, mineRows);
   const byPost = new Map<string, LineOfferView[]>();
   const winning = new Map<string, string>();
   for (const offer of offers) {
@@ -96,8 +108,55 @@ export async function attachDigest<T extends DigestInput>(cards: T[], userId?: s
       tldr: roomLine || card.tldr,
       kept: keptIds.has(postId),
       offers: byPost.get(postId) ?? [],
+      marks: marksByPost.get(postId) ?? emptyMarks(),
     };
   });
+}
+
+export function emptyMarks(): ClipMarks {
+  return { interesting: 0, uninteresting: 0, informative: 0, mine: null };
+}
+
+function clipMarkMap(
+  grouped: Array<{ postId: string; kind: ClipMarkKind; _count: { _all: number } }>,
+  mineRows: Array<{ postId: string; kind: ClipMarkKind }>,
+): Map<string, ClipMarks> {
+  const marks = new Map<string, ClipMarks>();
+  for (const row of grouped) {
+    const current = marks.get(row.postId) ?? emptyMarks();
+    if (row.kind === "INTERESTING") current.interesting = row._count._all;
+    if (row.kind === "UNINTERESTING") current.uninteresting = row._count._all;
+    if (row.kind === "INFORMATIVE") current.informative = row._count._all;
+    marks.set(row.postId, current);
+  }
+  for (const row of mineRows) {
+    const current = marks.get(row.postId) ?? emptyMarks();
+    current.mine = row.kind;
+    marks.set(row.postId, current);
+  }
+  return marks;
+}
+
+export async function clipMarksFor(postId: string, userId: string): Promise<ClipMarks> {
+  const [grouped, mine] = await Promise.all([
+    prisma.clipMark.groupBy({
+      by: ["kind"],
+      where: { postId },
+      _count: { _all: true },
+    }),
+    prisma.clipMark.findUnique({
+      where: { userId_postId: { userId, postId } },
+      select: { kind: true },
+    }),
+  ]);
+  const marks = emptyMarks();
+  marks.mine = mine?.kind ?? null;
+  for (const row of grouped) {
+    if (row.kind === "INTERESTING") marks.interesting = row._count._all;
+    if (row.kind === "UNINTERESTING") marks.uninteresting = row._count._all;
+    if (row.kind === "INFORMATIVE") marks.informative = row._count._all;
+  }
+  return marks;
 }
 
 export async function peekPass(userId: string): Promise<{ publicId: string; fromName: string } | null> {

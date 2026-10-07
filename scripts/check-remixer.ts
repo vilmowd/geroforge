@@ -75,7 +75,7 @@ const tiktokPost = redditClip(
   "reel",
 );
 assert(tiktokPost?.format === "reel", tiktokPost?.format || "missing tiktok clip");
-assert(tiktokPost?.embedUrl === "https://www.tiktok.com/embed/v2/1234567890123456789", tiktokPost?.embedUrl || "missing tiktok embed");
+assert(tiktokPost?.embedUrl === "https://www.tiktok.com/player/v1/1234567890123456789", tiktokPost?.embedUrl || "missing tiktok embed");
 
 const nativePost = redditClip(
   {
@@ -101,8 +101,11 @@ const picturePost = redditClip(
 );
 assert(picturePost === null, "pictures are not reels");
 assert(shelfFormat("video", "https://www.youtube.com/watch?v=aqz-KE-bpKQ", false, true) === "video", "long videos stay videos");
+assert(shelfFormat("reel", "https://www.youtube.com/watch?v=aqz-KE-bpKQ", false, true) === "video", "long uploads stay videos even from a reel source");
 assert(shelfFormat("video", "https://www.youtube.com/shorts/aqz-KE-bpKQ", true, true) === "reel", "shorts move to reels");
 assert(shelfFormat("reel", "https://www.youtube.com/shorts/aqz-KE-bpKQ", true, true) === "reel", "shorts on the reel shelf stay reels");
+assert(shelfFormat("video", "https://vimeo.com/123456789", false, true) === "video", "long hosts stay on videos");
+assert(shelfFormat("reel", "https://www.reddit.com/r/TikTok/comments/abc/clip/", true, true) === "reel", "short community clips stay reels");
 const longReddit = redditClip(
   {
     title: "A long upload",
@@ -114,7 +117,18 @@ const longReddit = redditClip(
 assert(longReddit?.format === "video", longReddit?.format || "long YouTube uploads belong on videos");
 
 const tiktok = toEmbedUrl("https://www.tiktok.com/@reader/video/1234567890123456789");
-assert(tiktok === "https://www.tiktok.com/embed/v2/1234567890123456789", tiktok || "missing tiktok embed");
+assert(tiktok === "https://www.tiktok.com/player/v1/1234567890123456789", tiktok || "missing tiktok embed");
+const tiktokPlaying = playbackEmbedSrc(tiktok);
+const tiktokPlayback = tiktokPlaying ? new URL(tiktokPlaying) : null;
+assert(tiktokPlayback?.pathname === "/player/v1/1234567890123456789", tiktokPlaying || "missing tiktok player");
+assert(tiktokPlayback?.searchParams.get("autoplay") === "1", "tiktok autoplay");
+assert(playbackEmbedSrc("https://www.tiktok.com/embed/v2/1234567890123456789") === tiktokPlaying, "older tiktok embeds use the player");
+
+const vimeoPlaying = playbackEmbedSrc("https://player.vimeo.com/video/123456789");
+const vimeoPlayback = vimeoPlaying ? new URL(vimeoPlaying) : null;
+assert(vimeoPlayback?.searchParams.get("autoplay") === "1", "vimeo autoplay");
+assert(vimeoPlayback?.searchParams.get("muted") === "1", "vimeo starts muted so playback can begin");
+assert(vimeoPlayback?.searchParams.get("playsinline") === "1", "vimeo plays inline");
 
 const instagram = toEmbedUrl("https://www.instagram.com/reel/AbC123/?utm_source=ig");
 assert(instagram === "https://www.instagram.com/reel/AbC123/embed", instagram || "missing instagram embed");

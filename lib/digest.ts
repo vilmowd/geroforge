@@ -19,6 +19,15 @@ export type LineOfferView = {
   picked: boolean;
 };
 
+export type ClipMarkKind = "INTERESTING" | "UNINTERESTING" | "INFORMATIVE";
+
+export type ClipMarks = {
+  interesting: number;
+  uninteresting: number;
+  informative: number;
+  mine: ClipMarkKind | null;
+};
+
 type Pairable = {
   id: string;
   title: string;

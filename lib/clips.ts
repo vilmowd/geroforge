@@ -1,4 +1,4 @@
-import { redditVideoEmbed, toEmbedUrl } from "@/lib/embed";
+import { isDirectMedia, isVideoHost, redditVideoEmbed, toEmbedUrl } from "@/lib/embed";
 import type { ShelfFormat } from "@/lib/remixer";
 
 export type RedditListing = {
@@ -13,6 +13,8 @@ export type RedditListing = {
   domain?: string;
   thumbnail?: string;
   preview?: { images?: { source?: { url?: string } }[] };
+  media?: { reddit_video?: unknown };
+  secure_media?: { reddit_video?: unknown };
   score?: number;
   ups?: number;
 };
@@ -21,17 +23,16 @@ export type RedditClip = {
   title: string;
   text: string;
   sourceUrl: string;
-  embedUrl: string;
+  embedUrl: string | null;
   thumbnailUrl: string | null;
   format: ShelfFormat;
 };
 
-export const SHORT_FORM_SECONDS = 180;
+export const SHORT_FORM_SECONDS = 60;
 
 export function shelfFormat(sourceFormat: ShelfFormat, link: string, shortClip: boolean, embedded: boolean): ShelfFormat {
   if (/tiktok\.com|instagram\.com\/reel|\/shorts\//i.test(link) || shortClip) return "reel";
-  if (sourceFormat === "reel" && embedded) return "reel";
-  if (embedded && (sourceFormat === "post" || sourceFormat === "article" || sourceFormat === "video")) return "video";
+  if (embedded && (sourceFormat === "post" || sourceFormat === "article" || sourceFormat === "video" || sourceFormat === "reel")) return "video";
   if (!embedded && sourceFormat === "video" && /reddit\.com/i.test(link)) return "post";
   if (sourceFormat === "reel") return "post";
   return sourceFormat;
@@ -41,16 +42,23 @@ export function redditClip(post: RedditListing, sourceFormat: ShelfFormat): Redd
   if (!post.title || !post.permalink || post.stickied || post.over_18) return null;
   const permalink = `https://www.reddit.com${post.permalink.startsWith("/") ? post.permalink : `/${post.permalink}`}`;
   const outbound = post.url || "";
-  const native = Boolean(post.is_video || post.post_hint === "hosted:video" || post.domain === "v.redd.it");
+  const native = Boolean(
+    post.is_video ||
+      post.post_hint === "hosted:video" ||
+      post.domain === "v.redd.it" ||
+      post.media?.reddit_video ||
+      post.secure_media?.reddit_video,
+  );
   const outboundEmbed = outbound ? toEmbedUrl(outbound) : null;
   const longYouTube = /(?:youtube\.com\/watch|youtu\.be\/)/i.test(outbound) && !/\/shorts\//i.test(outbound);
   if (sourceFormat === "reel" && longYouTube) return null;
+  const needsResolve = !outboundEmbed && isVideoHost(outbound) && !isDirectMedia(outbound);
   const embedUrl = outboundEmbed || (native ? redditVideoEmbed(permalink) : null);
-  if (!embedUrl) return null;
-  const sourceUrl = outboundEmbed ? outbound : permalink;
+  if (!embedUrl && !needsResolve) return null;
+  const sourceUrl = outboundEmbed || needsResolve ? outbound : permalink;
   const shortClip =
-    !longYouTube &&
-    (sourceFormat === "reel" || native || /\/shorts\/|tiktok\.com|instagram\.com\/reel/i.test(`${sourceUrl} ${outbound}`));
+    /\/shorts\/|tiktok\.com|instagram\.com\/reel/i.test(`${sourceUrl} ${outbound}`) ||
+    (sourceFormat === "reel" && native);
   return {
     title: post.title,
     text: post.selftext || "",

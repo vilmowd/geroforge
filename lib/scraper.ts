@@ -23,7 +23,13 @@ import { httpsImage, imageFromMarkup, openGraphImage } from "@/lib/thumbnails";
 import { USER_AGENT, assertPublicHttpUrl, fetchPublicBody, resolvePublicUrl } from "@/lib/url-safety";
 
 const FRESH_MS = 36 * 60 * 60 * 1000;
+const FOREIGN_CLIP_MS = 7 * 24 * 60 * 60 * 1000;
 const MAX_ITEMS_PER_SOURCE = 8;
+
+function freshFor(source: Source): number {
+  if (source.kind !== "youtube" && (source.format === "video" || source.format === "reel")) return FOREIGN_CLIP_MS;
+  return FRESH_MS;
+}
 
 export type PublishResult =
   | { status: "created"; slug: string }
@@ -67,14 +73,6 @@ type RedditPost = RedditListing & {
   created_utc?: number;
 };
 
-function leadSource(sources: Source[], name: string): Source[] {
-  const lead = sources.find((source) => source.sourceName === name);
-  const rest = sources.filter((source) => source !== lead);
-  const start = rest.length ? ingestionSlot() % rest.length : 0;
-  const rotated = [...rest.slice(start), ...rest.slice(0, start)];
-  return lead ? [lead, ...rotated] : rotated;
-}
-
 export async function runIngestionCycle(): Promise<void> {
   console.info("[forge] ingestion started");
   const startOfDay = new Date();
@@ -103,7 +101,14 @@ export async function runIngestionCycle(): Promise<void> {
   );
   const passes = planDeskPasses(SOURCES, ingestionSlot(), categoryCounts);
 
-  async function collect(desk: string, sources: Source[], limit: number, maxReddit = 1, countDesk = true) {
+  async function collect(
+  desk: string,
+  sources: Source[],
+  limit: number,
+  maxReddit = 1,
+  countDesk = true,
+  perSource = 1,
+) {
     let made = 0;
     let redditOnDesk = 0;
     for (const source of sources) {
@@ -117,7 +122,7 @@ export async function runIngestionCycle(): Promise<void> {
       if (reddit && redditOnDesk >= maxReddit) continue;
       if (reddit) redditOnDesk += 1;
       try {
-        const result = await ingestSource(source, 1);
+        const result = await ingestSource(source, source.kind === "youtube" ? 1 : perSource);
         made += result.created;
         created += result.created;
         if (result.created > 0) {
@@ -137,12 +142,26 @@ export async function runIngestionCycle(): Promise<void> {
     return made;
   }
 
-  const reelSources = SOURCES.filter((source) => source.format === "reel");
-  const reelsMade = await collect("Entertainment", spreadSources(leadSource(reelSources, "Reddit / popular clips"), 16), REELS_PER_RUN, 4, false);
+  const reelForeign = SOURCES.filter((source) => source.format === "reel" && source.kind !== "youtube");
+  const reelYoutube = SOURCES.filter((source) => source.format === "reel" && source.kind === "youtube");
+  const foreignReelGoal = Math.min(4, REELS_PER_RUN);
+  let reelsMade = await collect("Entertainment", reelForeign, foreignReelGoal, reelForeign.length, false, 2);
+  reelsMade += await collect(
+    "Entertainment",
+    spreadSources(reelYoutube, 12),
+    REELS_PER_RUN - reelsMade,
+    0,
+    false,
+  );
   console.info(`[forge] reels published=${reelsMade}`);
 
-  const clipSources = SOURCES.filter((source) => source.format === "video");
-  const clipsMade = await collect("Science", spreadSources(leadSource(clipSources, "Reddit / popular videos"), 12), VIDEOS_PER_RUN, 2, false);
+  const clipForeign = SOURCES.filter((source) => source.format === "video" && source.kind !== "youtube").sort((a, b) =>
+    Number(b.sourceName.startsWith("Vimeo")) - Number(a.sourceName.startsWith("Vimeo")),
+  );
+  const clipYoutube = SOURCES.filter((source) => source.format === "video" && source.kind === "youtube");
+  const foreignClipGoal = Math.min(3, VIDEOS_PER_RUN);
+  let clipsMade = await collect("Science", clipForeign, foreignClipGoal, clipForeign.length, false, 2);
+  clipsMade += await collect("Science", spreadSources(clipYoutube, 8), VIDEOS_PER_RUN - clipsMade, 0, false);
   console.info(`[forge] videos published=${clipsMade}`);
 
   for (let deskIndex = 0; deskIndex < DESKS.length; deskIndex += 1) {
@@ -350,6 +369,10 @@ async function ingestSource(
   return ingestXmlFeed(source, budget, options?.shortsOnly);
 }
 
+export function ingestPublicSource(source: Source, budget: number) {
+  return ingestSource(source, budget);
+}
+
 async function ingestReddit(source: Source, budget: number): Promise<{ created: number; skipped: number }> {
   let page: { body: string };
   try {
@@ -357,20 +380,20 @@ async function ingestReddit(source: Source, budget: number): Promise<{ created: 
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
     if (!/429|403|too many requests|forbidden/i.test(message)) throw error;
-    return ingestXmlFeed(rssFallback(source), budget, source.format === "reel");
+    return ingestXmlFeed(rssFallback(source), budget, false);
   }
   let payload: { data?: { children?: { data?: RedditPost }[] } };
   try {
     payload = JSON.parse(page.body) as { data?: { children?: { data?: RedditPost }[] } };
   } catch {
-    return ingestXmlFeed(rssFallback(source), budget, source.format === "reel");
+    return ingestXmlFeed(rssFallback(source), budget, false);
   }
   const posts = (payload.data?.children || [])
     .map((child) => child.data)
     .filter((post): post is RedditPost => Boolean(post))
     .filter((post) => {
       if (!post.created_utc) return true;
-      return Date.now() - post.created_utc * 1000 <= FRESH_MS;
+      return Date.now() - post.created_utc * 1000 <= freshFor(source);
     })
     .sort(
       (a, b) =>
@@ -422,7 +445,7 @@ async function ingestXmlFeed(
 ): Promise<{ created: number; skipped: number }> {
   const page = await fetchPublicBody(source.url, "feed");
   const items = parseFeed(page.body)
-    .filter((item) => !item.publishedAt || Date.now() - item.publishedAt <= FRESH_MS)
+    .filter((item) => !item.publishedAt || Date.now() - item.publishedAt <= freshFor(source))
     .sort((a, b) => {
       const heat = feedHeat(b) - feedHeat(a);
       if (heat) return heat;
@@ -436,7 +459,7 @@ async function ingestXmlFeed(
 
   for (const item of items) {
     if (created >= budget) break;
-    if (item.publishedAt && Date.now() - item.publishedAt > FRESH_MS) {
+    if (item.publishedAt && Date.now() - item.publishedAt > freshFor(source)) {
       skipped += 1;
       continue;
     }
@@ -452,22 +475,22 @@ async function ingestXmlFeed(
         ? `https://www.youtube.com/shorts/${item.videoId}`
         : `https://www.youtube.com/watch?v=${item.videoId}`
       : articleUrl || outsideClip || (isDiscussionLink(item.link) && item.playable) || item.link;
-    const longYouTube = /(?:youtube\.com\/watch|youtu\.be\/)/i.test(link) && !/\/shorts\//i.test(link);
-    if (source.format === "reel" && longYouTube && !(item.seconds && item.seconds > 0 && item.seconds <= SHORT_FORM_SECONDS)) {
-      skipped += 1;
-      continue;
-    }
-    const embedUrl = toEmbedUrl(link) || (isDiscussionLink(link) && item.nativeVideo ? redditVideoEmbed(link) : null);
+    const outsideHost = /tiktok\.com|instagram\.com|vimeo\.com/i.test(link);
+    const embedUrl =
+      toEmbedUrl(link) ||
+      (!outsideHost && isDiscussionLink(item.link) && item.nativeVideo ? redditVideoEmbed(item.link) : null);
     if (source.kind === "youtube" && !embedUrl) {
       skipped += 1;
       continue;
     }
-    const shortClip = shortLink || Boolean(item.seconds && item.seconds > 0 && item.seconds <= SHORT_FORM_SECONDS);
-    if (source.format === "reel" && item.seconds && item.seconds > SHORT_FORM_SECONDS) {
+    if ((source.format === "reel" || source.format === "video") && !embedUrl && !isVideoHost(link)) {
       skipped += 1;
       continue;
     }
-    if (source.format === "video" && shortClip) {
+    const shortByUrl = /tiktok\.com|instagram\.com\/reel|\/shorts\//i.test(link);
+    const shortByTime = Boolean(item.seconds && item.seconds > 0 && item.seconds <= SHORT_FORM_SECONDS);
+    const shortClip = shortLink || shortByUrl || shortByTime;
+    if (source.format === "reel" && !shortClip) {
       skipped += 1;
       continue;
     }
@@ -542,7 +565,7 @@ function firstPlayable(block: string): string | null {
   const found = block.match(/https?:\/\/[^\s"'<>]+/gi) || [];
   for (const raw of found) {
     const candidate = decodeEntities(raw).replace(/[),.;\]]+$/, "");
-    if (toEmbedUrl(candidate)) return candidate;
+    if (toEmbedUrl(candidate) || /(?:^|\.)tiktok\.com|instagram\.com|vimeo\.com/i.test(candidate)) return candidate;
   }
   return null;
 }

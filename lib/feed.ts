@@ -5,9 +5,9 @@ import { interleave, mixSeed, shuffle, spreadSources } from "@/lib/mix";
 import { postWhere } from "@/lib/post-ref";
 import { prisma } from "@/lib/prisma";
 import { openSecret, reveal, seal } from "@/lib/seal";
-import { pairDoors, preferSources, type DoorPeek, type LineOfferView } from "@/lib/digest";
+import { pairDoors, preferSources, type ClipMarks, type DoorPeek, type LineOfferView } from "@/lib/digest";
 import { leadWithFollows, readFollows } from "@/lib/follows";
-import { attachDigest, peekPass, sourceWeights } from "@/lib/loops";
+import { attachDigest, emptyMarks, peekPass, sourceWeights } from "@/lib/loops";
 import { inferFormat, readRemix, type RemixedContent, type ShelfFormat } from "@/lib/remixer";
 import { SOURCES } from "@/lib/sources";
 
@@ -51,6 +51,7 @@ export type FeedCard = {
   passedBy: string | null;
   door: DoorPeek | null;
   offers: LineOfferView[];
+  marks: ClipMarks;
 };
 
 export type PostDetail = {
@@ -332,6 +333,7 @@ function toCard(
     passedBy: null,
     door: null,
     offers: [],
+    marks: emptyMarks(),
     format: inferFormat({
       contentType: post.contentType,
       sourceName: post.sourceName,
@@ -352,7 +354,8 @@ export async function getWatchQueue(slug: string, userId?: string, seenIds: stri
   });
   if (!start) return null;
   const voted = await votedIds(userId, [start.id]);
-  const card = toCard(start, voted.has(start.id));
+  const [enriched] = await attachDigest([{ ...toCard(start, voted.has(start.id)), postId: start.id }], userId);
+  const { postId: _internalId, ...card } = enriched;
   const page = await getFeedPage("all", userId, null, 24, {
     mix,
     seenIds: seenIds.filter((id) => id !== start.id && id !== start.publicId),

@@ -9,7 +9,7 @@ const EMBED_RULES: { host: string; test: (pathname: string) => boolean }[] = [
   },
   {
     host: "www.tiktok.com",
-    test: (pathname) => /^\/embed\/v2\/\d{6,24}\/?$/.test(pathname),
+    test: (pathname) => /^\/(?:embed\/v2|player\/v1)\/\d{6,24}\/?$/.test(pathname),
   },
   {
     host: "www.instagram.com",
@@ -32,6 +32,7 @@ const ALLOWED_QUERY = new Set([
   "mute",
   "muted",
   "playsinline",
+  "autopause",
   "rel",
   "modestbranding",
   "controls",
@@ -68,7 +69,7 @@ export function canonicalVideoPage(embedUrl: string): string | null {
     return id ? `https://www.youtube.com/watch?v=${id}` : null;
   }
   if (url.hostname === "www.tiktok.com") {
-    const id = url.pathname.match(/\/embed\/v2\/(\d{6,24})/)?.[1];
+    const id = url.pathname.match(/\/(?:embed\/v2|player\/v1)\/(\d{6,24})/)?.[1];
     return id ? `https://www.tiktok.com/video/${id}` : null;
   }
   if (url.hostname === "www.instagram.com") {
@@ -94,7 +95,7 @@ export function toEmbedUrl(input: string): string | null {
   if (youtube) return allow(`https://www.youtube-nocookie.com/embed/${youtube}`);
 
   const tiktok = tiktokId(url);
-  if (tiktok) return allow(`https://www.tiktok.com/embed/v2/${tiktok}`);
+  if (tiktok) return allow(`https://www.tiktok.com/player/v1/${tiktok}`);
 
   const instagram = instagramEmbed(url);
   if (instagram) return allow(instagram);
@@ -166,6 +167,8 @@ export function playbackEmbedSrc(input: string | null | undefined): string | nul
     url.searchParams.set("enablejsapi", "1");
     return allow(url.toString());
   }
+  const tiktok = input ? tiktokPlayback(input) : null;
+  if (tiktok) return tiktok;
   if (!input || !isAllowedEmbedUrl(input)) return null;
   let url: URL;
   try {
@@ -175,10 +178,10 @@ export function playbackEmbedSrc(input: string | null | undefined): string | nul
   }
   if (url.hostname === "player.vimeo.com") {
     url.searchParams.set("autoplay", "1");
+    // Start silent so the phone actually begins the clip, then the player turns sound on.
     url.searchParams.set("muted", "1");
     url.searchParams.set("playsinline", "1");
-  } else if (url.hostname === "www.tiktok.com") {
-    url.searchParams.set("autoplay", "1");
+    url.searchParams.set("autopause", "0");
   } else if (url.hostname === "www.redditmedia.com") {
     url.searchParams.set("autoplay", "1");
   }
@@ -231,8 +234,25 @@ function youtubeId(url: URL): string | null {
 
 function tiktokId(url: URL): string | null {
   if (!url.hostname.toLowerCase().endsWith("tiktok.com")) return null;
-  const match = url.pathname.match(/\/(?:video|embed\/v2)\/(\d{6,24})/);
+  const match = url.pathname.match(/\/(?:video|embed\/v2|player\/v1)\/(\d{6,24})/);
   return match?.[1] ?? null;
+}
+
+function tiktokPlayback(input: string): string | null {
+  let url: URL;
+  try {
+    url = new URL(input);
+  } catch {
+    return null;
+  }
+  const id = tiktokId(url);
+  if (!id) return null;
+  const player = new URL(`https://www.tiktok.com/player/v1/${id}`);
+  player.searchParams.set("autoplay", "1");
+  player.searchParams.set("loop", "1");
+  player.searchParams.set("rel", "0");
+  player.searchParams.set("controls", "1");
+  return allow(player.toString());
 }
 
 function instagramEmbed(url: URL): string | null {

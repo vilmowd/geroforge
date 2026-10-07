@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, Suspense, useCallback, useContext, useRef, useState, type ReactNode } from "react";
+import { flushSync } from "react-dom";
 import { WatchFeed } from "@/components/WatchFeed";
 import type { FeedCard, FeedFilter } from "@/lib/feed";
 
@@ -28,7 +29,9 @@ export function useWatch(): WatchApi | null {
 export function WatchSession({ children, fallback }: { children: ReactNode; fallback?: ReactNode }) {
   const [request, setRequest] = useState<WatchRequest | null>(null);
   const seenRef = useRef<(id: string) => void>(() => undefined);
-  const open = useCallback((next: WatchRequest) => setRequest(next), []);
+  const open = useCallback((next: WatchRequest) => {
+    flushSync(() => setRequest(next));
+  }, []);
   const bindSeen = useCallback((fn: (id: string) => void) => {
     seenRef.current = fn;
   }, []);

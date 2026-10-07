@@ -3,9 +3,15 @@
 import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { keepLine, offerLine, passClip, pickLine, pullLine, settlePass } from "@/app/actions/loops";
-import { LINE_LEAD } from "@/lib/digest";
+import { keepLine, markClip, offerLine, passClip, pickLine, pullLine, settlePass } from "@/app/actions/loops";
+import { LINE_LEAD, type ClipMarkKind, type ClipMarks } from "@/lib/digest";
 import type { FeedCard } from "@/lib/feed";
+
+const CLIP_CHOICES: Array<{ kind: ClipMarkKind; label: string; key: keyof Omit<ClipMarks, "mine"> }> = [
+  { kind: "INTERESTING", label: "Interesting", key: "interesting" },
+  { kind: "UNINTERESTING", label: "Not interesting", key: "uninteresting" },
+  { kind: "INFORMATIVE", label: "Informative", key: "informative" },
+];
 
 export function DigestActions({
   post,
@@ -29,6 +35,10 @@ export function DigestActions({
     void settlePass();
   }, [post.passedBy, post.id]);
   const login = `/login?next=${encodeURIComponent(`/posts/${post.slug}`)}`;
+
+  if (post.format === "video" || post.format === "reel") {
+    return <ClipMarks post={post} authenticated={authenticated} login={login} />;
+  }
 
   if (!authenticated) {
     return (
@@ -189,4 +199,70 @@ export function DigestActions({
     setNote(result.error || "Saved.");
     if (result.ok) router.refresh();
   }
+}
+
+function ClipMarks({
+  post,
+  authenticated,
+  login,
+}: {
+  post: FeedCard;
+  authenticated: boolean;
+  login: string;
+}) {
+  const [marks, setMarks] = useState<ClipMarks>(post.marks);
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    setMarks(post.marks);
+  }, [post.id, post.marks.interesting, post.marks.uninteresting, post.marks.informative, post.marks.mine]);
+
+  if (!authenticated) {
+    return (
+      <p className="relative z-20 text-xs text-mist">
+        <Link href={login} className="font-semibold text-copper underline">
+          Sign in
+        </Link>{" "}
+        to mark a clip interesting, not interesting, or informative.
+      </p>
+    );
+  }
+
+  async function onMark(kind: ClipMarkKind) {
+    setBusy(true);
+    const result = await markClip(post.id, kind);
+    setBusy(false);
+    if (result.error || !result.marks) {
+      setNote(result.error || "Could not save that reaction.");
+      return;
+    }
+    setMarks(result.marks);
+    setNote("");
+  }
+
+  return (
+    <div className="relative z-20 flex flex-col gap-2">
+      <div className="flex flex-wrap gap-2">
+        {CLIP_CHOICES.map((choice) => {
+          const count = marks[choice.key];
+          const selected = marks.mine === choice.kind;
+          return (
+            <button
+              key={choice.kind}
+              type="button"
+              className={`${selected ? "btn" : "btn-ghost"} min-h-9 px-3 py-1 text-xs`}
+              aria-pressed={selected}
+              disabled={busy}
+              onClick={() => void onMark(choice.kind)}
+            >
+              {choice.label}
+              {count > 0 ? ` ${count}` : ""}
+            </button>
+          );
+        })}
+      </div>
+      {note ? <p className="text-xs text-mist">{note}</p> : null}
+    </div>
+  );
 }
