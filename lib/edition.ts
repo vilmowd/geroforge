@@ -1,4 +1,4 @@
-import { inferFormat, readRemix, type ShelfFormat } from "@/lib/remixer";
+import { inferFormat, type ShelfFormat } from "@/lib/remixer";
 import { SLOT_MS, ingestionSlot } from "@/lib/pipeline";
 import { prisma } from "@/lib/prisma";
 import { reveal } from "@/lib/seal";
@@ -41,8 +41,21 @@ export type KeptShow = {
   keeper: string;
 };
 
+export type DiscussedStory = EditionStory & { comments: number };
+
 const TEXT = new Set<ShelfFormat>(["article", "news", "world", "post"]);
 const STOP = new Set(["this", "that", "with", "from", "after", "before", "about", "their", "there", "which", "would", "could", "should", "says", "said"]);
+const WIRE_COUNT = 8;
+const FIVE_COUNT = 5;
+const EARLIER_COUNT = 30;
+
+type Seat = {
+  sources: Set<string>;
+  formats: Set<ShelfFormat>;
+  categories: Set<string>;
+  titles: Set<string>;
+  topics: Set<string>[];
+};
 
 export function editionClock(now = new Date()) {
   const slot = ingestionSlot(now.getTime());
@@ -71,40 +84,25 @@ export function editionClock(now = new Date()) {
   };
 }
 
-export function buildEdition(stories: EditionStory[], follows: FollowSet, now = new Date()): HouseEdition {
+export function buildEdition(stories: EditionStory[], follows: FollowSet, now = new Date(), reservedTitles: string[] = []): HouseEdition {
   const clock = editionClock(now);
   const ranked = [...stories].sort(byInterest(follows));
   const newest = [...stories].sort(byNewest);
   const used = new Set<string>();
-  const lead = take(ranked, 1, used, isText)[0] ?? null;
-  const beside: EditionStory[] = [];
-  const besideSources = new Set(lead ? [lead.sourceName] : []);
-  for (const story of ranked) {
-    if (beside.length >= 2) break;
-    if (!isText(story) || used.has(story.id) || besideSources.has(story.sourceName)) continue;
-    used.add(story.id);
-    besideSources.add(story.sourceName);
-    beside.push(story);
+  const seat = emptySeat();
+  for (const title of reservedTitles) {
+    seat.titles.add(titleKey(title));
+    const bag = tokens(title);
+    if (bag.size >= 2) seat.topics.push(bag);
   }
-  const clip = take(ranked, 1, used, isPlay)[0] ?? null;
-  const five = [lead, ...beside, clip].filter((story): story is EditionStory => Boolean(story));
-  for (const story of ranked) {
-    if (five.length >= 5) break;
-    if (used.has(story.id)) continue;
-    used.add(story.id);
-    five.push(story);
-  }
-  const bundle = findBundle(newest.filter(isText));
+  const lead = pickSpread(ranked, 1, used, seat, isText)[0] ?? pickSpread(ranked, 1, used, seat)[0] ?? null;
+  const beside = pickSpread(ranked, 2, used, seat, isText);
+  const clip = pickSpread(ranked, 1, used, seat, isPlay)[0] ?? null;
+  const bundle = takeBundle(newest, used, seat);
+  const five = pickMixed(ranked, FIVE_COUNT, used, seat);
+  const wire = pickMixed(newest, WIRE_COUNT, used, seat);
+  const earlier = pickMixed(newest, EARLIER_COUNT, used, seat);
   const desks = new Set(bundle.map((story) => story.category)).size;
-  const wire = newest.slice(0, 8);
-  const shown = new Set<string>([
-    ...(lead ? [lead.id] : []),
-    ...beside.map((story) => story.id),
-    ...(clip ? [clip.id] : []),
-    ...five.map((story) => story.id),
-    ...wire.map((story) => story.id),
-    ...bundle.map((story) => story.id),
-  ]);
   return {
     name: clock.name,
     show: clock.show,
@@ -113,18 +111,18 @@ export function buildEdition(stories: EditionStory[], follows: FollowSet, now = 
     lead,
     beside,
     clip,
-    five: five.slice(0, 5),
+    five,
     wire,
-    earlier: newest.filter((story) => !shown.has(story.id)).slice(0, 24),
+    earlier,
     bundle,
     bundleTitle: bundle.length < 2 ? null : desks >= 2 ? "One story, several desks" : "Two sources, one story",
   };
 }
 
-export async function loadEdition(follows: FollowSet, now = new Date()): Promise<HouseEdition> {
+export async function loadEditionStories(): Promise<EditionStory[]> {
   const rows = await prisma.post.findMany({
     orderBy: { createdAt: "desc" },
-    take: 240,
+    take: 360,
     select: {
       publicId: true,
       title: true,
@@ -135,10 +133,13 @@ export async function loadEdition(follows: FollowSet, now = new Date()): Promise
       contentType: true,
       embedUrl: true,
       thumbnailUrl: true,
-      remixedContent: true,
     },
   });
-  return buildEdition(rows.map(toStory), follows, now);
+  return rows.map(toStory);
+}
+
+export async function loadEdition(follows: FollowSet, now = new Date()): Promise<HouseEdition> {
+  return buildEdition(await loadEditionStories(), follows, now);
 }
 
 export async function loadKeptShow(): Promise<KeptShow[]> {
@@ -164,6 +165,35 @@ export async function loadKeptShow(): Promise<KeptShow[]> {
   }));
 }
 
+export async function loadDiscussed(limit = 5): Promise<DiscussedStory[]> {
+  const rows = await prisma.post.findMany({
+    where: { commentCount: { gt: 0 } },
+    orderBy: [{ commentCount: "desc" }, { createdAt: "desc" }],
+    take: limit,
+    select: {
+      publicId: true,
+      title: true,
+      sourceName: true,
+      sourceUrl: true,
+      category: true,
+      createdAt: true,
+      contentType: true,
+      embedUrl: true,
+      thumbnailUrl: true,
+      commentCount: true,
+    },
+  });
+  return rows.map((row) => ({ ...toStory(row), comments: row.commentCount }));
+}
+
+export async function loadDeskCounts(): Promise<Map<string, number>> {
+  const rows = await prisma.post.groupBy({
+    by: ["category"],
+    _count: { _all: true },
+  });
+  return new Map(rows.map((row) => [row.category, row._count._all]));
+}
+
 function toStory(row: {
   publicId: string;
   title: string;
@@ -174,9 +204,7 @@ function toStory(row: {
   contentType: string;
   embedUrl: string | null;
   thumbnailUrl: string | null;
-  remixedContent: unknown;
 }): EditionStory {
-  const remix = readRemix(row.remixedContent);
   return {
     id: row.publicId,
     title: row.title,
@@ -190,7 +218,6 @@ function toStory(row: {
       sourceUrl: row.sourceUrl,
       embedUrl: row.embedUrl,
       category: row.category,
-      stored: remix?.format,
     }),
     thumbnailUrl: row.thumbnailUrl && /^https?:\/\//i.test(row.thumbnailUrl) ? row.thumbnailUrl : null,
   };
@@ -220,20 +247,95 @@ function interest(story: EditionStory, follows: FollowSet) {
   return (follows.desks.includes(story.category) ? 2 : 0) + (follows.sources.includes(story.sourceName) ? 3 : 0);
 }
 
-function take(list: EditionStory[], count: number, used: Set<string>, ok: (story: EditionStory) => boolean) {
+function emptySeat(): Seat {
+  return { sources: new Set(), formats: new Set(), categories: new Set(), titles: new Set(), topics: [] };
+}
+
+function pickSpread(
+  list: EditionStory[],
+  count: number,
+  used: Set<string>,
+  seat: Seat,
+  allow: (story: EditionStory) => boolean = () => true,
+) {
   const picked: EditionStory[] = [];
-  for (const story of list) {
+  const gates: Array<(story: EditionStory) => boolean> = [
+    (story) => !seat.formats.has(story.format) && !seat.sources.has(story.sourceName) && !overlaps(story, seat),
+    (story) => !seat.formats.has(story.format) && !overlaps(story, seat),
+    (story) => !seat.sources.has(story.sourceName) && !overlaps(story, seat),
+    (story) => !overlaps(story, seat),
+  ];
+  for (const gate of gates) {
     if (picked.length >= count) break;
-    if (used.has(story.id) || !ok(story)) continue;
-    used.add(story.id);
-    picked.push(story);
+    for (const story of list) {
+      if (picked.length >= count) break;
+      if (used.has(story.id) || !allow(story) || !gate(story)) continue;
+      claim(story, used, seat);
+      picked.push(story);
+    }
   }
   return picked;
 }
 
+function pickMixed(list: EditionStory[], count: number, used: Set<string>, seat: Seat) {
+  const open = list.filter((story) => !used.has(story.id) && !overlaps(story, seat));
+  const buckets = new Map<ShelfFormat, EditionStory[]>();
+  for (const story of open) {
+    const bucket = buckets.get(story.format) ?? [];
+    bucket.push(story);
+    buckets.set(story.format, bucket);
+  }
+  const fresh = (["reel", "post", "video", "news", "world", "article"] as ShelfFormat[]).filter((format) => !seat.formats.has(format));
+  const seen = (["video", "reel", "news", "world", "article", "post"] as ShelfFormat[]).filter((format) => seat.formats.has(format));
+  const order = [...fresh, ...seen];
+  const picked: EditionStory[] = [];
+  let moved = true;
+  while (picked.length < count && moved) {
+    moved = false;
+    for (const format of order) {
+      if (picked.length >= count) break;
+      const bucket = buckets.get(format);
+      if (!bucket) continue;
+      const story = bucket.find((item) => !used.has(item.id) && !seat.sources.has(item.sourceName)) ?? bucket.find((item) => !used.has(item.id));
+      if (!story) continue;
+      claim(story, used, seat);
+      picked.push(story);
+      moved = true;
+    }
+  }
+  return picked;
+}
+
+function takeBundle(stories: EditionStory[], used: Set<string>, seat: Seat) {
+  const bundle = findBundle(stories.filter((story) => isText(story) && !used.has(story.id) && !overlaps(story, seat)));
+  for (const story of bundle) claim(story, used, seat);
+  return bundle;
+}
+
+function claim(story: EditionStory, used: Set<string>, seat: Seat) {
+  used.add(story.id);
+  seat.sources.add(story.sourceName);
+  seat.formats.add(story.format);
+  seat.categories.add(story.category);
+  seat.titles.add(titleKey(story.title));
+  const bag = tokens(story.title);
+  if (bag.size >= 2) seat.topics.push(bag);
+}
+
+function overlaps(story: EditionStory, seat: Seat) {
+  if (seat.titles.has(titleKey(story.title))) return true;
+  const mine = tokens(story.title);
+  if (mine.size < 2) return false;
+  return seat.topics.some((bag) => shared(bag, mine) >= 2);
+}
+
+function titleKey(title: string) {
+  return title.toLowerCase().replace(/\s+/g, " ").trim();
+}
+
 function findBundle(stories: EditionStory[]): EditionStory[] {
   let best: EditionStory[] = [];
-  for (let index = 0; index < Math.min(stories.length, 24); index += 1) {
+  for (let index = 0; index < Math.min(stories.length, 80); index += 1) {
     const story = stories[index];
     if (!story) continue;
     const mine = tokens(story.title);

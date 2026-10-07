@@ -4,6 +4,7 @@ import { emailKey, reveal } from "@/lib/seal";
 
 type DigestInput = {
   id: string;
+  postId?: string;
   tldr: string | null;
   deskLine: string | null;
   roomLine: string | null;
@@ -35,13 +36,18 @@ export async function sourceWeights(userId: string | undefined): Promise<Map<str
 
 export async function attachDigest<T extends DigestInput>(cards: T[], userId?: string): Promise<T[]> {
   if (cards.length === 0) return cards;
-  const publicIds = cards.map((card) => card.id);
-  const posts = await prisma.post.findMany({
-    where: { publicId: { in: publicIds } },
-    select: { id: true, publicId: true },
-  });
-  const internal = new Map(posts.map((post) => [post.publicId, post.id]));
-  const postIds = posts.map((post) => post.id);
+  const known = cards.every((card) => card.postId);
+  const internal = known
+    ? new Map(cards.map((card) => [card.id, card.postId as string]))
+    : new Map(
+        (
+          await prisma.post.findMany({
+            where: { publicId: { in: cards.map((card) => card.id) } },
+            select: { id: true, publicId: true },
+          })
+        ).map((post) => [post.publicId, post.id]),
+      );
+  const postIds = [...internal.values()];
   if (postIds.length === 0) return cards;
   const [offers, kept] = await Promise.all([
     prisma.lineOffer.findMany({

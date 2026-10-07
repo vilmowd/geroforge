@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { CategoryTabs } from "@/components/CategoryTabs";
-import { EditionBoard } from "@/components/EditionBoard";
+import { EditionBoard, EditionSkeleton } from "@/components/EditionBoard";
 
 export const metadata: Metadata = {
   title: "Daily digest",
@@ -14,7 +15,9 @@ export default function DigestPage() {
       <div className="sticky top-[calc(3.5rem+env(safe-area-inset-top))] z-20 -mx-3 mb-4 flex items-center px-3 py-1 sm:static sm:mx-0 sm:px-0 sm:py-0">
         <CategoryTabs active="digest" />
       </div>
-      <EditionBoard />
+      <Suspense fallback={<EditionSkeleton />}>
+        <EditionBoard />
+      </Suspense>
     </div>
   );
 }

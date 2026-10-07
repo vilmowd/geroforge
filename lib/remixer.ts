@@ -112,6 +112,30 @@ const CATEGORY_DICTIONARY: { category: string; words: string[] }[] = [
       "summit",
     ],
   },
+  {
+    category: "Sports",
+    words: ["touchdown", "championship", "grand prix", "playoffs", "world cup", "formula 1"],
+  },
+  {
+    category: "Space",
+    words: ["nasa", "astronaut", "telescope", "spacecraft", "rocket launch", "space station"],
+  },
+  {
+    category: "Culture",
+    words: ["film festival", "orchestra", "museum", "novelist", "box office"],
+  },
+  {
+    category: "Business",
+    words: ["earnings", "stock market", "acquisition", "inflation", "interest rate", "quarterly revenue"],
+  },
+  {
+    category: "Health",
+    words: ["vaccine", "hospital", "clinical trial", "public health", "surgeon"],
+  },
+  {
+    category: "Climate",
+    words: ["greenhouse", "emissions", "wildfire", "carbon dioxide", "sea level"],
+  },
 ];
 
 const KNOWN_CATEGORIES = new Set(CATEGORY_DICTIONARY.map((entry) => entry.category));

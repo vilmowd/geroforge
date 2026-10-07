@@ -1,6 +1,6 @@
 import type { Source } from "@/lib/sources";
 
-export const DESKS = ["AI", "Development", "Science", "Entertainment", "Technology", "World"] as const;
+export const DESKS = ["AI", "Development", "Science", "Entertainment", "Technology", "World", "Sports", "Space", "Culture", "Business", "Health", "Climate"] as const;
 
 export const RUNS_PER_DAY = 2;
 export const PER_DESK_PER_RUN = 4;

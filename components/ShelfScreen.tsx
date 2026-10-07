@@ -8,7 +8,6 @@ import { WatchSession } from "@/components/WatchSession";
 import { getCurrentUser } from "@/lib/auth";
 import { FEED_PAGE_SIZE, getFeedPage, parseFilter, type FeedFilter } from "@/lib/feed";
 import { mixSeed } from "@/lib/mix";
-import { readSeenIds } from "@/lib/seen";
 import { websiteJsonLd } from "@/lib/seo";
 
 export function ShelfScreen({
@@ -46,8 +45,7 @@ export function ShelfScreen({
 
 async function ShelfResults({ filter, category }: { filter: FeedFilter; category?: string }) {
   const user = await getCurrentUser();
-  const seenIds = await readSeenIds(user?.id);
-  const page = await getFeedPage(filter, user?.id, null, FEED_PAGE_SIZE, { mix: mixSeed(), seenIds, category });
+  const page = await getFeedPage(filter, user?.id, null, FEED_PAGE_SIZE, { mix: mixSeed(), category });
   return (
     <MediaShelf
       key={`${category || filter}:${page.mix}`}

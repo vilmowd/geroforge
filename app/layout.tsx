@@ -4,10 +4,9 @@ import { Suspense } from "react";
 import { BottomNav } from "@/components/BottomNav";
 import { CookieNotice } from "@/components/CookieNotice";
 import { ExitPrompt } from "@/components/ExitPrompt";
-import { Nav } from "@/components/Nav";
+import { AccountNav, Nav } from "@/components/Nav";
 import { ScrollTop } from "@/components/ScrollTop";
 import { SiteFooter } from "@/components/SiteFooter";
-import { getCurrentUser } from "@/lib/auth";
 import { siteUrl } from "@/lib/seo";
 import "./globals.css";
 
@@ -33,11 +32,7 @@ export const viewport: Viewport = {
   themeColor: "#ffffff",
 };
 
-export const dynamic = "force-dynamic";
-
-export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const user = await getCurrentUser();
-
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={sans.variable} suppressHydrationWarning>
       <body className="flex min-h-dvh flex-col font-sans antialiased">
@@ -48,7 +43,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           }}
         />
         <ScrollTop />
-        <Nav user={user ? { name: user.name, email: user.email, karma: user.karma, avatarUrl: user.avatarUrl } : null} />
+        <Suspense fallback={<Nav pending />}>
+          <AccountNav />
+        </Suspense>
         <div className="page-shell flex flex-1 flex-col pb-[calc(5.4rem+env(safe-area-inset-bottom))] sm:pb-0">
           <main className="mx-auto w-full max-w-6xl flex-1 px-3 py-3 sm:px-6 sm:py-4">{children}</main>
           <SiteFooter />

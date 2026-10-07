@@ -146,35 +146,35 @@ export async function getFeedPage(
   const category = validCategory(options?.category);
   const where = archiveWhere(category, filter);
   const marker = openArchiveCursor(cursor);
-  const rows = await prisma.post.findMany({
-    where: marker
-      ? {
-          AND: [
-            where,
-            {
-              OR: [
-                { createdAt: { lt: marker.createdAt } },
-                { AND: [{ createdAt: marker.createdAt }, { id: { lt: marker.id } }] },
-              ],
-            },
-          ],
-        }
-      : where,
-    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-    take: take + 1,
-    select: cardSelect,
-  });
+  const [rows, weights, follows] = await Promise.all([
+    prisma.post.findMany({
+      where: marker
+        ? {
+            AND: [
+              where,
+              {
+                OR: [
+                  { createdAt: { lt: marker.createdAt } },
+                  { AND: [{ createdAt: marker.createdAt }, { id: { lt: marker.id } }] },
+                ],
+              },
+            ],
+          }
+        : where,
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: take + 1,
+      select: cardSelect,
+    }),
+    sourceWeights(userId),
+    readFollows(userId),
+  ]);
   const hasMore = rows.length > take;
   const page = rows.slice(0, take);
   const oldest = page[page.length - 1];
   const nextCursor = hasMore && oldest ? sealArchiveCursor(oldest.createdAt, oldest.id) : null;
-  const ordered = leadWithFollows(preferSources(arrangeShelf(page, filter, mix), await sourceWeights(userId)), await readFollows(userId));
-  const voted = await votedIds(
-    userId,
-    ordered.map((post) => post.id),
-  );
-  const pass = userId ? await peekPass(userId) : null;
-  let cards = ordered.map((post) => toCard(post, voted.has(post.id)));
+  const ordered = leadWithFollows(preferSources(arrangeShelf(page, filter, mix), weights), follows);
+  const [voted, pass] = await Promise.all([votedIds(userId, ordered.map((post) => post.id)), userId ? peekPass(userId) : Promise.resolve(null)]);
+  let cards: Array<FeedCard & { postId: string }> = ordered.map((post) => ({ ...toCard(post, voted.has(post.id)), postId: post.id }));
   if (pass) {
     const already = cards.find((card) => card.id === pass.publicId);
     if (already) {
@@ -183,13 +183,13 @@ export async function getFeedPage(
       const row = await prisma.post.findFirst({ where: { publicId: pass.publicId }, select: cardSelect });
       if (row) {
         const passVote = await votedIds(userId, [row.id]);
-        cards = [{ ...toCard(row, passVote.has(row.id)), passedBy: pass.fromName }, ...cards];
+        cards = [{ ...toCard(row, passVote.has(row.id)), postId: row.id, passedBy: pass.fromName }, ...cards];
       }
     }
   }
-  cards = pairDoors(await attachDigest(cards, userId));
+  const ready = pairDoors(await attachDigest(cards, userId)).map(withoutPostId);
   return {
-    posts: cards,
+    posts: ready,
     nextCursor,
     mix,
     caughtUp: false,
@@ -278,6 +278,11 @@ export async function getSidebarData() {
       .sort((a, b) => b.count - a.count)
       .slice(0, 5),
   };
+}
+
+function withoutPostId(card: FeedCard & { postId?: string }): FeedCard {
+  const { postId: _postId, ...rest } = card;
+  return rest;
 }
 
 function toCard(

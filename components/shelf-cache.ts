@@ -2,8 +2,8 @@
 
 import type { FeedCard } from "@/lib/feed";
 
-const PREFIX = "gero-shelf:v4:";
-const MAX_POSTS = 480;
+const PREFIX = "gero-shelf:v5:";
+const MAX_POSTS = 30;
 
 export type ShelfCache = {
   mix: string;

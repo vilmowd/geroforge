@@ -5,7 +5,6 @@ import { WatchFeed } from "@/components/WatchFeed";
 import { getCurrentUser } from "@/lib/auth";
 import { getPostDetail, getWatchQueue, type PostDetail } from "@/lib/feed";
 import { mixSeed } from "@/lib/mix";
-import { readSeenIds } from "@/lib/seen";
 import { postJsonLd, postMetadata, type SeoPost } from "@/lib/seo";
 
 export async function generateMetadata({
@@ -23,8 +22,7 @@ export async function generateMetadata({
 export default async function PostPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const user = await getCurrentUser();
-  const seenIds = await readSeenIds(user?.id);
-  const queue = await getWatchQueue(slug, user?.id, seenIds, mixSeed());
+  const queue = await getWatchQueue(slug, user?.id, [], mixSeed());
   if (!queue) notFound();
 
   const start = queue.posts[queue.startIndex] ?? queue.posts[0];

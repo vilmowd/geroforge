@@ -102,6 +102,7 @@ model Post {
   corrections    Correction[]
 
   @@index([createdAt])
+  @@index([commentCount])
   @@index([category, createdAt])
   @@index([contentType, createdAt])
   @@index([isAutomated, createdAt])

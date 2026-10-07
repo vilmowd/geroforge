@@ -35,6 +35,42 @@ export const TOPICS = [
     title: "World",
     description: "Fresh public world news and short original notes from the outlets moving today.",
   },
+  {
+    slug: "sports",
+    category: "Sports",
+    title: "Sports",
+    description: "Fresh public sports clips and short original notes, with the broadcast still linked.",
+  },
+  {
+    slug: "space",
+    category: "Space",
+    title: "Space",
+    description: "Fresh public space reporting and clips, linked back to the mission source.",
+  },
+  {
+    slug: "culture",
+    category: "Culture",
+    title: "Culture",
+    description: "Fresh public culture clips and notes, with the original still one tap away.",
+  },
+  {
+    slug: "business",
+    category: "Business",
+    title: "Business",
+    description: "Fresh public business reporting and short original notes linked back to the source.",
+  },
+  {
+    slug: "health",
+    category: "Health",
+    title: "Health",
+    description: "Fresh public health reporting and short original notes linked back to the source.",
+  },
+  {
+    slug: "climate",
+    category: "Climate",
+    title: "Climate",
+    description: "Fresh public climate reporting and short original notes linked back to the source.",
+  },
 ] as const;
 
 export type Topic = (typeof TOPICS)[number];

@@ -2,7 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { cardWeight, PostCard } from "@/components/PostCard";
-import { readShelfCache, writeShelfCache } from "@/components/shelf-cache";
+import { writeShelfCache } from "@/components/shelf-cache";
 import { SkeletonCard } from "@/components/SkeletonCard";
 import { armPlayback, WatchFeed } from "@/components/WatchFeed";
 import { useWatch } from "@/components/WatchSession";
@@ -51,6 +51,8 @@ export function MediaShelf({
   const noteSeenRef = useRef<(id: string) => void>(() => undefined);
   const cursorRef = useRef(initialCursor);
   const loadingRef = useRef(false);
+  const moreRef = useRef<HTMLDivElement | null>(null);
+  const prefetchRef = useRef<{ cursor: string; promise: Promise<{ posts: FeedCard[]; nextCursor: string | null }> } | null>(null);
   const measuredRef = useRef(new Map<string, number>());
   const laneRef = useRef(new Map<string, number>());
   const lockedRef = useRef(new Set<string>());
@@ -59,21 +61,9 @@ export function MediaShelf({
   const [packEpoch, setPackEpoch] = useState(0);
   const [readMode, setReadMode] = useState(false);
 
-  const restoredRef = useRef(false);
   useEffect(() => {
-    if (!restoredRef.current) {
-      restoredRef.current = true;
-      const cached = readShelfCache(filter, category);
-      if (cached && cached.posts.length > 0) {
-        setPosts(cached.posts);
-        setCursor(cached.cursor);
-        cursorRef.current = cached.cursor;
-        setShelfMix(cached.mix);
-        return;
-      }
-    }
-    writeShelfCache(filter, category, { mix: shelfMix, posts, cursor });
-  }, [category, cursor, filter, posts, shelfMix]);
+    writeShelfCache(filter, category, { mix, posts: initialPosts.slice(0, 30), cursor: initialCursor });
+  }, [category, filter, freshKey, initialCursor, initialPosts, mix]);
 
   useEffect(() => {
     cursorRef.current = cursor;
@@ -83,7 +73,8 @@ export function MediaShelf({
     setPosts(initialPosts);
     setCursor(initialCursor);
     cursorRef.current = initialCursor;
-  }, [freshKey, initialCursor, initialPosts]);
+    prefetchRef.current = null;
+  }, [freshKey, initialCursor]);
 
   useEffect(() => {
     const stored = window.localStorage.getItem("forge_read_shelf") === "1";
@@ -100,24 +91,50 @@ export function MediaShelf({
     return () => window.removeEventListener("forge-read", onRead);
   }, []);
 
+  function fetchPage(next: string) {
+    const params = new URLSearchParams({ cursor: next, mix: shelfMix });
+    if (filter !== "all") params.set("filter", filter);
+    if (category) params.set("category", category);
+    return fetch(`/api/feed?${params.toString()}`).then(async (response) => {
+      if (!response.ok) throw new Error("feed");
+      return (await response.json()) as { posts: FeedCard[]; nextCursor: string | null };
+    });
+  }
+
+  function armPrefetch(next: string | null) {
+    if (!next || prefetchRef.current?.cursor === next) return;
+    prefetchRef.current = { cursor: next, promise: fetchPage(next) };
+  }
+
+  useEffect(() => {
+    const node = moreRef.current;
+    if (!node) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) armPrefetch(cursorRef.current);
+      },
+      { rootMargin: "800px" },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [cursor, shelfMix, filter, category]);
+
   async function loadMore() {
     const next = cursorRef.current;
     if (!next || loadingRef.current) return;
     loadingRef.current = true;
     setLoading(true);
+    const ready = prefetchRef.current?.cursor === next ? prefetchRef.current.promise : null;
+    prefetchRef.current = null;
     try {
-      const params = new URLSearchParams({ cursor: next, mix: shelfMix });
-      if (filter !== "all") params.set("filter", filter);
-      if (category) params.set("category", category);
-      const response = await fetch(`/api/feed?${params.toString()}`);
-      if (!response.ok) return;
-      const data = (await response.json()) as { posts: FeedCard[]; nextCursor: string | null };
+      const data = ready ? await ready : await fetchPage(next);
       setPosts((current) => {
         const seen = new Set(current.map((post) => post.id));
         return [...current, ...data.posts.filter((post) => !seen.has(post.id))];
       });
       cursorRef.current = data.nextCursor;
       setCursor(data.nextCursor);
+      armPrefetch(data.nextCursor);
     } catch {
       // Keep the cursor so the same chunk can be requested again.
     } finally {
@@ -173,22 +190,16 @@ export function MediaShelf({
   const indexOf = new Map(posts.map((post, index) => [post.id, index]));
 
   useLayoutEffect(() => {
-    let changed = false;
     for (const post of posts) {
+      if (lockedRef.current.has(post.id)) continue;
       const node = cardRef.current.get(post.id);
       if (!node) continue;
       const height = node.offsetHeight;
-      if (height > 0 && measuredRef.current.get(post.id) !== height) {
-        measuredRef.current.set(post.id, height);
-        changed = true;
-      }
+      if (height <= 0) continue;
+      measuredRef.current.set(post.id, height);
+      lockedRef.current.add(post.id);
     }
-    if (!changed) return;
-    const unlocked = posts.filter((post) => !lockedRef.current.has(post.id) && measuredRef.current.has(post.id));
-    if (unlocked.length === 0) return;
-    for (const post of unlocked) laneRef.current.delete(post.id);
-    setPackEpoch((epoch) => epoch + 1);
-  }, [posts, columns, packEpoch]);
+  }, [posts, columns, readMode]);
 
   return (
     <>
@@ -227,7 +238,7 @@ export function MediaShelf({
         </div>
       )}
       {cursor ? (
-        <div className="mt-4 flex justify-center">
+        <div ref={moreRef} className="mt-4 flex justify-center">
           <button type="button" className="btn min-w-36" onClick={() => void loadMore()} disabled={loading}>
             {loading ? "Loading" : "Load more"}
           </button>

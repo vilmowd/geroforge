@@ -3,7 +3,6 @@ import { clientIp } from "@/lib/client-ip";
 import { getCurrentUser } from "@/lib/auth";
 import { getFeedPage, parseFilter } from "@/lib/feed";
 import { rateLimit } from "@/lib/rate-limit";
-import { readSeenIds } from "@/lib/seen";
 
 export const dynamic = "force-dynamic";
 
@@ -18,9 +17,8 @@ export async function GET(request: Request) {
   const cursor = url.searchParams.get("cursor");
   const mix = url.searchParams.get("mix") || undefined;
   const user = await getCurrentUser();
-  const seenIds = await readSeenIds(user?.id);
   const category = url.searchParams.get("category") || undefined;
-  const page = await getFeedPage(filter, user?.id, cursor, undefined, { mix, seenIds, category });
+  const page = await getFeedPage(filter, user?.id, cursor, undefined, { mix, category });
   return NextResponse.json(page, {
     headers: { "Cache-Control": "private, max-age=300" },
   });
